@@ -1,0 +1,161 @@
+Express.js Advanced Security Implementation Prompt
+Project Overview
+Create a sophisticated, multi-layered security system for an Express.js server that combines dynamic behavioral analysis, fingerprinting, and intelligent bot detection with realistic response obfuscation.
+
+Technical Requirements
+Core Security Layers to Implement
+LAYER 1: Dynamic IP Reputation & Behavioral Analysis
+
+Implement in-memory IP tracking system with reputation scoring (0-100)
+
+Detect and block based on:
+
+Request rate limiting (60 requests/minute)
+
+Suspicious timing patterns (robotic consistency)
+
+404 fuzzing detection (5+ errors triggers blocking)
+
+Request speed analysis (<100ms intervals)
+
+Fingerprint diversity (botnet detection)
+
+Include reputation decay and memory cleanup mechanisms
+
+Use realistic delays (100-400ms) for blocking responses
+
+LAYER 2: Static User-Agent Blocking
+
+Block known malicious agents/scanners:
+
+Security tools: nmap, sqlmap, burpsuite, metasploit
+
+SEO/scraping bots: AhrefsBot, SemrushBot, MJ12bot
+
+Directory busters: dirbuster, gobuster, ffuf, wfuzz
+
+Network scanners: masscan, nuclei, httpx
+
+Categorize blocks for better logging
+
+Apply realistic delays before responses
+
+LAYER 3: Advanced Fingerprinting & Header Obfuscation
+
+Create client fingerprints using:
+
+Accept-Language, Accept-Encoding, Accept headers
+
+Sec-Fetch-* headers
+
+User-Agent (partial)
+
+Accept-Charset
+
+Implement security headers:
+
+CSP, XSS Protection, Frame Options, HSTS
+
+Permission Policy, Referrer Policy
+
+Add disinformation headers:
+
+X-Business-Unit, X-Service-Version
+
+X-Analytics-Enabled, X-Conversion-Tracking
+
+Remove revealing headers (X-Powered-By)
+
+LAYER 4: Enhanced Request Logging
+
+Log API requests with:
+
+Response time, status codes, IP addresses
+
+Fingerprint hashes, reputation scores
+
+Sanitized response bodies (remove sensitive data)
+
+Color-coded logging based on threat level
+
+Truncate long log lines appropriately
+
+Implementation Specifications
+Data Structures Required
+typescript
+interface IPReputation {
+  requestTimestamps: number[];
+  blockedUntil: number;
+  notFoundCount: number;
+  lastRequestTime: number;
+  fingerprintHits: Map<string, number>;
+  requestPatterns: number[];
+  reputationScore: number;
+}
+Configuration Constants
+typescript
+const config = {
+  RATE_LIMIT_WINDOW_MS: 60 * 1000,
+  RATE_LIMIT_MAX_REQUESTS: 60,
+  JAIL_DURATION_MS: 15 * 60 * 1000,
+  MAX_404_ERRORS: 5,
+  MIN_REQUEST_INTERVAL_MS: 100,
+  MAX_FINGERPRINT_DIVERSITY: 3,
+  PATTERN_ANALYSIS_WINDOW: 10,
+  SUSPICIOUS_CONSISTENCY_THRESHOLD: 0.8,
+  INITIAL_REPUTATION: 50,
+  REPUTATION_DECAY_PER_MINUTE: 1,
+  BLOCK_THRESHOLD: 20,
+};
+Required Utility Functions
+IP/CIDR Utilities
+
+isIPInCIDR(ip: string, cidr: string): boolean
+
+ip2int(ip: string): number
+
+Behavioral Analysis
+
+calculateTimingConsistency(intervals: number[]): number
+
+isDatacenterIP(ip: string): boolean (conservative approach)
+
+Response Obfuscation
+
+addRealisticDelay(min: number, max: number): number
+
+getRealisticHeaders(): Record<string, string>
+
+Security Headers
+
+Comprehensive CSP policies
+
+HSTS and permission policies
+
+Business obfuscation headers
+
+Admin & Monitoring Features
+Protected admin endpoint (/admin/ip-reputation)
+
+JSON output of current IP reputations
+
+Statistics on blocked IPs and tracking data
+
+Authentication via bearer token
+
+Behavioral Requirements
+Threat Detection Scenarios
+Rate Limit Violations: Track requests in sliding window, jail for 15 minutes
+
+404 Fuzzing: Count consecutive 404s, block after threshold
+
+Robotic Timing: Detect consistent request intervals using coefficient of variation
+
+Fingerprint Switching: Identify botnets using multiple fingerprints per IP
+
+Speed Attacks: Block requests coming faster than 100ms intervals
+
+Response Behavior
+All blocking responses should include realistic random delays
+
+Error messages should be generic and non-revealing

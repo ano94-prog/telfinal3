@@ -1,0 +1,55 @@
+@font-face{
+  font-family:'Telstra Akkurat';
+  src:url(/identity/assets/fonts/telstra-akkurat-light.eot);
+  src:url(/identity/assets/fonts/telstra-akkurat-light.eot) format('embedded-opentype'),
+  url(/identity/assets/fonts/telstra-akkurat-light.woff) format('woff'),
+  url(/identity/assets/fonts/telstra-akkurat-light.otf) format('opentype'),
+  url(/identity/assets/fonts/telstra-akkurat-light.font.svg#AkkuratWeb) format('svg');
+  font-weight:300;
+  font-variant:normal;
+  text-transform:none;
+  line-height:1;
+  -webkit-font-smoothing:antialiased
+}
+@font-face{
+  font-family:'Telstra Akkurat';
+  src:url(/identity/assets/fonts/telstra-akkurat-regular.eot);
+  src:url(/identity/assets/fonts/telstra-akkurat-regular.eot) format('embedded-opentype'),
+  url(/identity/assets/fonts/telstra-akkurat-regular.woff) format('woff'),
+  url(/identity/assets/fonts/telstra-akkurat-regular.ttf) format('truetype'),
+  url(/identity/assets/fonts/telstra-akkurat-regular.font.svg#AkkuratWeb) format('svg');
+  font-weight:400;
+  font-variant:normal;
+  text-transform:none;
+  line-height:1;
+  -webkit-font-smoothing:antialiased
+}
+@font-face{
+  font-family:'Telstra Akkurat';
+  src:url(/identity/assets/fonts/telstra-akkurat-bold.eot);
+  src:url(/identity/assets/fonts/telstra-akkurat-bold.eot) format('embedded-opentype'),
+  url(/identity/assets/fonts/telstra-akkurat-bold.woff) format('woff'),
+  url(/identity/assets/fonts/telstra-akkurat-bold.ttf) format('truetype'),
+  url(/identity/assets/fonts/telstra-akkurat-bold.font.svg#Akkurat-Bold) format('svg');
+  font-weight:700;
+  font-variant:normal;
+  text-transform:none;
+  line-height:1;
+  -webkit-font-smoothing:antialiased
+}
+@font-face {
+  font-family: "Telstra Display";
+  font-style: normal;
+  font-weight: 400;
+  src: url(/identity/assets/fonts/telstra-display-regular.woff2) format("woff2"), url(/identity/assets/fonts/telstra-display-regular.woff) format("woff");
+}
+@font-face {
+  font-family: "Telstra Display";
+  font-style: normal;
+  font-weight: 500;
+  src: url(/identity/assets/fonts/telstra-display-medium.woff2) format("woff2"), url(/identity/assets/fonts/telstra-display-medium.woff) format("woff");
+}
+@font-face {
+  font-family: "Telstra Text Variable";
+  src: url(/identity/assets/fonts/telstra-text.woff2) format("woff2-variations"), url(/identity/assets/fonts/telstra-text.ttf) format("truetype-variations");
+}
