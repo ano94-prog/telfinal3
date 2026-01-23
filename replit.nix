@@ -6,6 +6,7 @@
     pkgs.gcc
     pkgs.gnumake
     pkgs.pkg-config
+    pkgs.sqlite
   ];
   
   env = {

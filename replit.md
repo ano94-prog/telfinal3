@@ -1,6 +1,6 @@
 # Overview
 
-This is a full-stack authentication application built with React, Express, and TypeScript. The application implements a login system with form validation, user authentication, and login attempt tracking. It features a clean, modern UI using shadcn/ui components and Tailwind CSS, with a PostgreSQL database managed through Drizzle ORM.
+This is a full-stack authentication application built with React, Express, and TypeScript. The application implements a login system with form validation, user authentication, and login attempt tracking. It features a clean, modern UI using shadcn/ui components and Tailwind CSS, with a SQLite database managed through Drizzle ORM.
 
 # User Preferences
 
