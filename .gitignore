@@ -1,5 +1,37 @@
+# Dependencies
 node_modules/
+
+# Build output
+dist/
 .next/
+
+# Environment files (use Replit Secrets instead)
+.env
+.env.local
+.env.production
+
+# Database files (recreated on deploy)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
 *.log
-.replit
+npm-debug.log*
+
+# Local Replit directories
 .local/
+.cache/
+.config/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Sensitive files
+logins.txt

@@ -125,19 +125,17 @@ export default function LoadingPage() {
 
       <footer className="auth-footer">
         <div className="auth-footer-content">
-          <p className="auth-footer-copyright">Copyright © 2025</p>
+          <p className="auth-footer-copyright">Copyright © {new Date().getFullYear()}</p>
           <a
             className="auth-footer-privacy"
-            href="#"
-            target="_blank"
+            href="/privacy"
             data-testid="link-privacy"
           >
             Privacy
           </a>
           <a
             className="auth-footer-terms"
-            href="#"
-            target="_blank"
+            href="/terms"
             data-testid="link-terms"
           >
             Terms of use

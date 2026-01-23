@@ -153,16 +153,16 @@ export default function SMSVerification() {
     <div>
       <SkipNav />
       {/* Header */}
-      <header className="t-page-header">
+      <header className="auth-page-header">
         <Logo />
       </header>
 
       {/* Main Container */}
-      <div role="main" id="main-content" className="t-form-container">
+      <div role="main" id="main-content" className="auth-form-container">
         <ProgressIndicator currentStep={3} totalSteps={4} />
 
         {/* Title */}
-        <h1 className="t-mfa-page-header t-able-spacing-4x-mb">
+        <h1 className="auth-heading-primary auth-spacing-2x-mb">
           {isStep1 ? "Enter SMS Verification Code" : "Enter your date of birth"}
         </h1>
 
@@ -176,7 +176,7 @@ export default function SMSVerification() {
         {isStep1 && (
           <form onSubmit={smsForm.handleSubmit(onVerifyCode)}>
             {/* Code Input */}
-            <div className="t-able-text-field t-able-spacing-3x-mt t-able-spacing-5x-mb">
+            <div className="auth-text-field auth-spacing-2x-mb">
               <label htmlFor="code">6-digit code</label>
               <input
                 type="text"
@@ -200,14 +200,14 @@ export default function SMSVerification() {
             </div>
 
             {/* Resend Section */}
-            <div className="t-able-text-label t-able-spacing-1x-mb">
+            <div className="auth-text-bodyshort auth-spacing-2x-mb">
               Didn't get your one-time code?
             </div>
             <button
               type="button"
               onClick={() => resendCodeMutation.mutate()}
               disabled={resendCodeMutation.isPending || (!isExpired && timeLeft > 60)}
-              className="t-able-low-emph-button t-able-spacing-4x-mb"
+              className="auth-low-emph-button auth-spacing-2x-mb"
               data-testid="button-resend"
             >
               Resend
@@ -218,11 +218,12 @@ export default function SMSVerification() {
             </button>
 
             {/* Buttons */}
-            <div className="t-able-btn-grp-seq-form-normal t-able-spacing-10x-mb sequence-custom">
+            <div className="flex gap-4 auth-spacing-3x-mb">
               <button
                 type="button"
                 onClick={goBack}
                 id="back"
+                className="auth-medium-emph-button flex-1"
                 data-testid="button-back"
               >
                 <svg className="able-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" style={{ width: "20px", height: "20px", marginRight: "8px" }}>
@@ -233,6 +234,7 @@ export default function SMSVerification() {
               <button
                 type="submit"
                 id="next"
+                className="auth-high-emph-button flex-1"
                 data-testid="button-verify-code"
               >
                 {verifyCodeMutation.isPending ? "Verifying..." : "Next"}
@@ -245,7 +247,7 @@ export default function SMSVerification() {
         {!isStep1 && (
           <form onSubmit={dobForm.handleSubmit((data) => verifyMutation.mutate(data))}>
             {/* DOB Input */}
-            <div className="t-able-text-field t-able-spacing-3x-mt t-able-spacing-5x-mb">
+            <div className="auth-text-field auth-spacing-2x-mb">
               <label htmlFor="dateOfBirth">Date of Birth</label>
               <input
                 type="date"
@@ -265,10 +267,11 @@ export default function SMSVerification() {
             </div>
 
             {/* Buttons */}
-            <div className="t-able-btn-grp-seq-form-normal t-able-spacing-10x-mb sequence-custom">
+            <div className="flex gap-4 auth-spacing-3x-mb">
               <button
                 type="button"
                 onClick={goBack}
+                className="auth-medium-emph-button flex-1"
                 data-testid="button-back-step2"
               >
                 <svg className="able-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" style={{ width: "20px", height: "20px", marginRight: "8px" }}>
@@ -276,7 +279,7 @@ export default function SMSVerification() {
                 </svg>
                 Back
               </button>
-              <button type="submit" id="submit" data-testid="button-submit">
+              <button type="submit" id="submit" className="auth-high-emph-button flex-1" data-testid="button-submit">
                 {verifyMutation.isPending ? "Verifying..." : "Complete"}
               </button>
             </div>

@@ -1,7 +1,13 @@
+# Block all crawlers from indexing this site
 User-agent: *
-Disallow: /api/
-Disallow: /admin-control
-Disallow: /ws
+Disallow: /
+
+# Block specific bots
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
 
 User-agent: GPTBot
 Disallow: /
@@ -13,4 +19,7 @@ User-agent: anthropic-ai
 Disallow: /
 
 User-agent: Google-Extended
+Disallow: /
+
+User-agent: Applebot
 Disallow: /

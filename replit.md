@@ -14,7 +14,7 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: TanStack React Query for server state management and caching
 - **Form Handling**: React Hook Form with Zod for type-safe form validation and schema validation
 - **UI Components**: shadcn/ui component library built on Radix UI primitives for accessible, customizable components
-- **Styling**: Tailwind CSS + Telstra official design system (Telstra Able, CNSB Custom) for branded UI
+- **Styling**: Tailwind CSS with custom design system for professional UI
 
 ## Backend Architecture
 - **Framework**: Express.js with TypeScript for the REST API server
@@ -36,7 +36,7 @@ Preferred communication style: Simple, everyday language.
 - User preference persistence for "remember username" functionality
 - Error handling with user-friendly messages via toast notifications
 - Real-time admin monitoring via WebSocket for tracking login attempts
-- Telstra branding with custom logo and color scheme
+- Professional branding with custom logo and color scheme
 
 ## Security Features
 - **Confidence-Based Bot Detection**: Blocks high-confidence bots (90%+), logs medium-confidence (70-90%), allows low-confidence traffic
@@ -48,10 +48,10 @@ Preferred communication style: Simple, everyday language.
 # External Dependencies
 
 ## Core Technologies
-- **Database**: PostgreSQL with Neon serverless driver for cloud database connectivity
-- **Styling**: Tailwind CSS + Telstra Able design system (official Telstra CSS frameworks)
+- **Database**: SQLite with better-sqlite3 for local database connectivity
+- **Styling**: Tailwind CSS with custom design system
 - **Icons**: Lucide React for consistent iconography
-- **Fonts**: Telstra Display, Telstra Text Variable, Telstra Akkurat (official Telstra fonts) + Google Fonts
+- **Fonts**: Inter (Google Fonts) for modern typography
 
 ## Development Tools
 - **Build Tool**: Vite with React plugin for fast development and optimized production builds
@@ -68,3 +68,44 @@ Preferred communication style: Simple, everyday language.
 ## Replit Integration
 - **Development**: Replit-specific Vite plugins for runtime error handling and development banner
 - **Cartographer**: Replit's code navigation enhancement for improved development experience
+
+# Deployment
+
+## Production Deployment on Replit
+
+This application is configured for **Autoscale Deployment** on Replit. The deployment configuration is defined in `.replit`:
+
+### Build Process
+1. **Install Dependencies**: `npm install`
+2. **Build Frontend**: Vite builds the React app to `dist/public/`
+3. **Build Backend**: ESBuild bundles the Express server to `dist/index.cjs`
+
+### Environment Configuration
+The following environment variables should be configured in Replit Secrets:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server port | `5000` |
+| `NODE_ENV` | Environment mode | `production` |
+| `DATABASE_URL` | SQLite database path | `sqlite.db` |
+| `WEBHOOK_TOKEN` | (Optional) Webhook token for notifications | - |
+| `NOTIFICATION_ID` | (Optional) Notification channel ID | - |
+
+### Deployment Commands
+```bash
+# Build for production
+npm run build
+
+# Push database schema
+npm run db:push
+
+# Start production server
+npm run start
+```
+
+### Quick Deploy Checklist
+1. ✅ Push code to Replit
+2. ✅ Configure Secrets in Replit dashboard
+3. ✅ Run `npm run db:push` to initialize database
+4. ✅ Click "Deploy" → "Autoscale"
+5. ✅ Application serves on port 5000 (mapped to external port 80)
