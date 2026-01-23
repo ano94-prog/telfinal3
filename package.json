@@ -8,8 +8,8 @@
     "build": "npx -y vite build && npx -y esbuild server/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/index.cjs",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "npx -y tsc",
-    "db:push": "npx -y drizzle-kit push",
-    "db:migrate": "npx -y drizzle-kit push"
+    "db:push": "DATABASE_URL=sqlite.db npx -y drizzle-kit push",
+    "db:migrate": "DATABASE_URL=sqlite.db npx -y drizzle-kit push"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -3,8 +3,9 @@ import Database from 'better-sqlite3';
 import * as schema from "@shared/schema";
 import path from 'path';
 
-// Use DATABASE_URL from environment or default to sqlite.db in project root
-const dbPath = process.env.DATABASE_URL || 'sqlite.db';
+// Force use of local SQLite database, ignoring any Replit-injected DATABASE_URL
+// which might point to PostgreSQL
+const dbPath = 'sqlite.db';
 
 // Ensure we use absolute path for production reliability
 const absoluteDbPath = path.isAbsolute(dbPath) ? dbPath : path.join(process.cwd(), dbPath);
