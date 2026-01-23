@@ -1,15 +1,3 @@
-import { type User, type InsertUser, type LoginData, type InsertLoginAttempt, type LoginAttempt } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  validateLogin(loginData: LoginData): Promise<{ success: boolean; user?: User; message: string }>;
-  logLoginAttempt(attempt: InsertLoginAttempt): Promise<LoginAttempt>;
-  updateUserRememberPreference(username: string, remember: boolean): Promise<void>;
-}
-
 import { type User, type InsertUser, type LoginData, type InsertLoginAttempt, type LoginAttempt, users, loginAttempts } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";

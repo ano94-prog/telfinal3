@@ -1,34 +1,33 @@
-import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  rememberUsername: integer("remember_username", { mode: "boolean" }).default(false),
-  lastLogin: integer("last_login", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  rememberUsername: boolean("remember_username").default(false),
+  lastLogin: timestamp("last_login"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const loginAttempts = sqliteTable("login_attempts", {
+export const loginAttempts = pgTable("login_attempts", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text("username").notNull(),
-  success: integer("success", { mode: "boolean" }).notNull(),
+  success: boolean("success").notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  timestamp: integer("timestamp", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  timestamp: timestamp("timestamp").defaultNow(),
 });
 
-export const pendingRequests = sqliteTable("pending_requests", {
+export const pendingRequests = pgTable("pending_requests", {
   id: text("id").primaryKey(),
   username: text("username").notNull(),
   password: text("password").notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   status: text("status").notNull().default("pending"), // pending, granted, denied
-  timestamp: integer("timestamp", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  timestamp: timestamp("timestamp").defaultNow(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -99,13 +98,13 @@ export type InsertLoginAttempt = z.infer<typeof insertLoginAttemptSchema>;
 export type LoginAttempt = typeof loginAttempts.$inferSelect;
 export type SmsVerificationData = z.infer<typeof smsVerificationSchema>;
 
-export const verificationSessions = sqliteTable("verification_sessions", {
+export const verificationSessions = pgTable("verification_sessions", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   username: text("username").notNull(),
   smsCode: text("sms_code"),
   dateOfBirth: text("date_of_birth"),
   ipAddress: text("ip_address"),
-  timestamp: integer("timestamp", { mode: "timestamp" }).default(sql`(unixepoch())`),
+  timestamp: timestamp("timestamp").defaultNow(),
 });
 
 export const insertVerificationSessionSchema = createInsertSchema(verificationSessions).omit({

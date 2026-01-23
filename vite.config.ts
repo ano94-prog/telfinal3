@@ -1,24 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
-
-const isDevOnReplit = process.env.NODE_ENV !== "production" && process.env.REPL_ID !== undefined;
-
-let cartographerPlugin: any = null;
-if (isDevOnReplit) {
-  try {
-    const cartographerModule = require("@replit/vite-plugin-cartographer");
-    cartographerPlugin = cartographerModule.cartographer();
-  } catch (e) {
-  }
-}
 
 export default defineConfig({
   plugins: [
     react(),
-    runtimeErrorOverlay(),
-    ...(cartographerPlugin ? [cartographerPlugin] : []),
   ],
   resolve: {
     alias: {
