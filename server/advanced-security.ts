@@ -64,11 +64,11 @@ export function rateLimitMiddleware(maxRequests: number = 5, windowMs: number = 
     // Clean up old records periodically
     if (rateLimits.size > 10000) {
       const cutoff = now - windowMs * 2;
-      for (const [key, value] of rateLimits.entries()) {
+      Array.from(rateLimits.entries()).forEach(([key, value]) => {
         if (value.windowStart < cutoff) {
           rateLimits.delete(key);
         }
-      }
+      });
     }
 
     // No existing record or expired window
@@ -123,11 +123,11 @@ export function generateCSRFToken(req: Request): { token: string; expiresAt: num
   // Cleanup old tokens
   if (csrfTokens.size > 10000) {
     const now = Date.now();
-    for (const [key, value] of csrfTokens.entries()) {
+    Array.from(csrfTokens.entries()).forEach(([key, value]) => {
       if (value.expiresAt < now || value.used) {
         csrfTokens.delete(key);
       }
-    }
+    });
   }
 
   return { token, expiresAt };

@@ -1,4 +1,5 @@
 import { CheckCircle, ArrowLeft } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 import { Logo } from "@/components/Logo";
@@ -8,7 +9,12 @@ import { ProgressIndicator } from "@/components/ProgressIndicator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Success() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    document.title = "Verification Successful";
+    return () => { document.title = "Sign in"; };
+  }, []);
 
   const goBack = () => {
     setLocation("/");

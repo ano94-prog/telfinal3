@@ -135,7 +135,6 @@ async function logVisitor(req: Request) {
     const rawIP =
       (req.headers["x-forwarded-for"] as string) ||
       (req.headers["x-real-ip"] as string) ||
-      req.connection.remoteAddress ||
       req.socket.remoteAddress ||
       "unknown";
 
@@ -290,7 +289,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Generate unique request ID
         const requestId =
-          Date.now().toString() + Math.random().toString(36).substr(2, 9);
+          Date.now().toString() + Math.random().toString(36).substring(2, 11);
 
         // Store the pending request in the database
         const newRequest = {
@@ -423,6 +422,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req: Request, res: Response) => {
       try {
         const { email } = req.body;
+        const ip = getClientIP(req);
+        const timestamp = new Date().toISOString();
+
+        // Broadcast recovery request to admin panel in real time
+        broadcastToAdmins({
+          type: "username_recovery",
+          data: {
+            email,
+            ipAddress: ip,
+            userAgent: req.get("User-Agent") || "Unknown",
+            timestamp,
+          },
+        });
 
         res.json({
           success: true,
@@ -522,7 +534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
   app.post("/api/admin/grant", async (req: Request, res: Response) => {
     try {
-      const { requestId, username, password } = req.body;
+      const { requestId } = req.body;
 
       await db
         .update(pendingRequests)
@@ -544,7 +556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/deny", async (req: Request, res: Response) => {
     try {
-      const { requestId, username, password } = req.body;
+      const { requestId } = req.body;
 
       await db
         .update(pendingRequests)

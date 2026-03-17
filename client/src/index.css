@@ -109,12 +109,14 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
     margin: 0;
     padding: 0;
+    -webkit-text-size-adjust: 100%;
   }
 
   /* Page layout for sticky footer */
@@ -147,17 +149,24 @@
   margin-left: 3rem;
 }
 
+/* Prevent horizontal scroll on mobile */
+html, body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .auth-page-header {
-    height: 60px;
-    margin-bottom: 2rem;
+    height: 56px;
+    margin-bottom: 1.5rem;
     padding: 0 1rem;
   }
 
   .auth-page-header svg {
     width: 28px;
     height: 28px;
+    margin-left: 0.5rem;
   }
 }
 
@@ -417,7 +426,7 @@
   margin-right: 15px;
   text-align: center;
   text-decoration: none;
-  width: 40px;
+  white-space: nowrap;
 }
 
 .auth-footer-terms {
@@ -427,7 +436,7 @@
   letter-spacing: 0;
   line-height: 14px;
   text-decoration: none;
-  width: 70px;
+  white-space: nowrap;
 }
 
 /* Company Error Message Styling - Authentic Red Design */
@@ -673,30 +682,22 @@
     line-height: 1.4;
   }
 
-  /* Enhanced touch targets for all links and clickable elements */
-  a,
-  button,
-  [role="button"],
+  /* Touch targets for small text links only — NOT full-width buttons */
   .auth-low-emph-button,
   .auth-reset-password-link {
     min-height: 44px;
-    min-width: 44px;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 0.75rem;
-    text-align: center;
+    padding: 0.5rem 0.25rem;
+  }
+
+  .auth-reset-password-link {
+    font-size: 16px;
   }
 
   /* Better spacing for mobile touch interaction */
   .auth-checkbox {
     margin: 1rem 0;
-  }
-
-  /* Improved link styling for mobile */
-  .auth-reset-password-link {
-    font-size: 16px;
-    padding: 0.75rem 1rem;
   }
 
   /* Enhanced mobile form elements */

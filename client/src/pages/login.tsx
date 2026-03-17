@@ -45,6 +45,10 @@ export default function Login() {
     startTracking();
   }, [startTracking]);
 
+  useEffect(() => {
+    document.title = "Sign in";
+  }, []);
+
   const usernameForm = useForm<UsernameFormData>({
     resolver: zodResolver(usernameSchema),
     defaultValues: {
@@ -139,17 +143,7 @@ export default function Login() {
       );
     },
     onError: () => {
-      // If this redirect-on-error behavior is intentional, keep it.
-      const requestId = Date.now().toString();
-      const username = usernameData?.username || "";
-      setLocation(
-        `/loading?requestId=${requestId}&username=${encodeURIComponent(
-          username,
-        )}`,
-      );
-
-      // Or alternatively, surface the error locally:
-      // setHasError(true);
+      setHasError(true);
     },
   });
 
