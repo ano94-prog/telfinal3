@@ -568,6 +568,34 @@ async function getCountryFromIP(ip) {
     return "Unknown";
   }
 }
+async function getIPDetails(ip) {
+  const fallback = {
+    country: "Unknown",
+    countryCode: "",
+    city: "",
+    org: "",
+    query: ip
+  };
+  if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip.startsWith("172.")) {
+    return { ...fallback, country: "Local" };
+  }
+  try {
+    const response = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,city,org,isp,as,query`
+    );
+    const data = await response.json();
+    return data.status === "success" ? {
+      country: data.country || "Unknown",
+      countryCode: data.countryCode || "",
+      city: data.city || "",
+      org: data.org || data.isp || data.as || "",
+      query: data.query || ip
+    } : fallback;
+  } catch (error) {
+    console.error("Error getting visitor IP details:", error);
+    return fallback;
+  }
+}
 async function logVisitor(req) {
   try {
     const rawIP = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown";
@@ -604,6 +632,13 @@ function clearVisitorsLog() {
       "visitors.txt"
     );
     import_fs.default.writeFileSync(logPath, "");
+    const richLogPath = import_path2.default.join(
+      process.cwd(),
+      "client",
+      "public",
+      "visitors-rich.jsonl"
+    );
+    import_fs.default.writeFileSync(richLogPath, "");
     console.log(
       `[${(/* @__PURE__ */ new Date()).toISOString()}] Visitors log cleared automatically`
     );
@@ -633,6 +668,7 @@ function parseVisitorLog(fileContent) {
       screen: "",
       tz: "",
       canvas: "",
+      webgl: "",
       platform: "",
       cores: "",
       mem: "",
@@ -643,6 +679,22 @@ function parseVisitorLog(fileContent) {
       path: requestPath,
       ts: timestamp
     };
+  });
+}
+function readRichVisitorLog() {
+  const richLogPath = import_path2.default.join(
+    process.cwd(),
+    "client",
+    "public",
+    "visitors-rich.jsonl"
+  );
+  if (!import_fs.default.existsSync(richLogPath)) return [];
+  return import_fs.default.readFileSync(richLogPath, "utf8").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).flatMap((line) => {
+    try {
+      return [JSON.parse(line)];
+    } catch {
+      return [];
+    }
   });
 }
 async function registerRoutes(app2) {
@@ -955,6 +1007,68 @@ async function registerRoutes(app2) {
       });
     }
   });
+  const visitorTelemetrySchema = import_zod2.z.object({
+    ua: import_zod2.z.string().max(2e3).default(""),
+    screen: import_zod2.z.string().max(100).default(""),
+    tz: import_zod2.z.string().max(100).default(""),
+    canvas: import_zod2.z.string().max(128).default(""),
+    webgl: import_zod2.z.string().max(500).default(""),
+    platform: import_zod2.z.string().max(200).default(""),
+    cores: import_zod2.z.number().int().nonnegative().nullable(),
+    mem: import_zod2.z.number().nonnegative().nullable(),
+    depth: import_zod2.z.number().int().nonnegative().nullable(),
+    touch: import_zod2.z.number().int().nonnegative(),
+    lang: import_zod2.z.string().max(100).default(""),
+    ref: import_zod2.z.string().max(2e3).default(""),
+    path: import_zod2.z.string().max(2e3).default("/"),
+    ts: import_zod2.z.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString())
+  });
+  app2.post("/api/visitors/collect", async (req, res) => {
+    try {
+      const telemetry = visitorTelemetrySchema.parse(req.body);
+      const rawIP = req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown";
+      const ip = rawIP.split(",")[0].trim();
+      const geo = await getIPDetails(ip);
+      const entry = {
+        serverIp: ip,
+        geo_ip: geo.query,
+        country: geo.country,
+        country_code: geo.countryCode,
+        city: geo.city,
+        org: geo.org,
+        ua: telemetry.ua,
+        screen: telemetry.screen,
+        tz: telemetry.tz,
+        canvas: telemetry.canvas,
+        webgl: telemetry.webgl,
+        platform: telemetry.platform,
+        cores: telemetry.cores?.toString() || "",
+        mem: telemetry.mem?.toString() || "",
+        depth: telemetry.depth?.toString() || "",
+        touch: telemetry.touch.toString(),
+        lang: telemetry.lang,
+        ref: telemetry.ref,
+        path: telemetry.path,
+        ts: telemetry.ts
+      };
+      const richLogPath = import_path2.default.join(
+        process.cwd(),
+        "client",
+        "public",
+        "visitors-rich.jsonl"
+      );
+      import_fs.default.appendFileSync(richLogPath, `${JSON.stringify(entry)}
+`);
+      res.status(201).json({ success: true });
+    } catch (error) {
+      if (error instanceof import_zod2.z.ZodError) {
+        res.status(400).json({ message: "Invalid visitor telemetry" });
+        return;
+      }
+      console.error("Error collecting visitor telemetry:", error);
+      res.status(500).json({ message: "Unable to collect visitor telemetry" });
+    }
+  });
   app2.get("/api/visitors", (_req, res) => {
     try {
       const logPath = import_path2.default.join(
@@ -963,12 +1077,15 @@ async function registerRoutes(app2) {
         "public",
         "visitors.txt"
       );
-      if (!import_fs.default.existsSync(logPath)) {
-        res.json([]);
-        return;
-      }
-      const fileContent = import_fs.default.readFileSync(logPath, "utf8");
-      res.json(parseVisitorLog(fileContent));
+      const legacyEntries = import_fs.default.existsSync(logPath) ? parseVisitorLog(import_fs.default.readFileSync(logPath, "utf8")) : [];
+      const richEntries = readRichVisitorLog();
+      const richKeys = new Set(
+        richEntries.map((entry) => `${entry.serverIp}|${entry.path}`)
+      );
+      const unmatchedLegacyEntries = legacyEntries.filter(
+        (entry) => !richKeys.has(`${entry.serverIp}|${entry.path}`)
+      );
+      res.json([...unmatchedLegacyEntries, ...richEntries]);
     } catch (error) {
       console.error("Error serving visitor data:", error);
       res.status(500).json({ message: "Error reading visitor log file" });

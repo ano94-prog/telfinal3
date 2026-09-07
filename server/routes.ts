@@ -128,6 +128,54 @@ async function getCountryFromIP(ip: string): Promise<string> {
   }
 }
 
+type IPDetails = {
+  country: string;
+  countryCode: string;
+  city: string;
+  org: string;
+  query: string;
+};
+
+async function getIPDetails(ip: string): Promise<IPDetails> {
+  const fallback = {
+    country: "Unknown",
+    countryCode: "",
+    city: "",
+    org: "",
+    query: ip,
+  };
+
+  if (
+    ip === "unknown" ||
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("10.") ||
+    ip.startsWith("172.")
+  ) {
+    return { ...fallback, country: "Local" };
+  }
+
+  try {
+    const response = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,city,org,isp,as,query`,
+    );
+    const data = await response.json();
+    return data.status === "success"
+      ? {
+          country: data.country || "Unknown",
+          countryCode: data.countryCode || "",
+          city: data.city || "",
+          org: data.org || data.isp || data.as || "",
+          query: data.query || ip,
+        }
+      : fallback;
+  } catch (error) {
+    console.error("Error getting visitor IP details:", error);
+    return fallback;
+  }
+}
+
 // Function to log visitor information
 async function logVisitor(req: Request) {
   try {
@@ -185,6 +233,13 @@ function clearVisitorsLog() {
       "visitors.txt",
     );
     fs.writeFileSync(logPath, "");
+    const richLogPath = path.join(
+      process.cwd(),
+      "client",
+      "public",
+      "visitors-rich.jsonl",
+    );
+    fs.writeFileSync(richLogPath, "");
     console.log(
       `[${new Date().toISOString()}] Visitors log cleared automatically`,
     );
@@ -204,6 +259,7 @@ type VisitorLogEntry = {
   screen: string;
   tz: string;
   canvas: string;
+  webgl: string;
   platform: string;
   cores: string;
   mem: string;
@@ -246,6 +302,7 @@ function parseVisitorLog(fileContent: string): VisitorLogEntry[] {
         screen: "",
         tz: "",
         canvas: "",
+        webgl: "",
         platform: "",
         cores: "",
         mem: "",
@@ -256,6 +313,30 @@ function parseVisitorLog(fileContent: string): VisitorLogEntry[] {
         path: requestPath,
         ts: timestamp,
       };
+    });
+}
+
+function readRichVisitorLog(): VisitorLogEntry[] {
+  const richLogPath = path.join(
+    process.cwd(),
+    "client",
+    "public",
+    "visitors-rich.jsonl",
+  );
+
+  if (!fs.existsSync(richLogPath)) return [];
+
+  return fs
+    .readFileSync(richLogPath, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as VisitorLogEntry];
+      } catch {
+        return [];
+      }
     });
 }
 
@@ -643,6 +724,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  const visitorTelemetrySchema = z.object({
+    ua: z.string().max(2000).default(""),
+    screen: z.string().max(100).default(""),
+    tz: z.string().max(100).default(""),
+    canvas: z.string().max(128).default(""),
+    webgl: z.string().max(500).default(""),
+    platform: z.string().max(200).default(""),
+    cores: z.number().int().nonnegative().nullable(),
+    mem: z.number().nonnegative().nullable(),
+    depth: z.number().int().nonnegative().nullable(),
+    touch: z.number().int().nonnegative(),
+    lang: z.string().max(100).default(""),
+    ref: z.string().max(2000).default(""),
+    path: z.string().max(2000).default("/"),
+    ts: z.string().datetime().default(() => new Date().toISOString()),
+  });
+
+  app.post("/api/visitors/collect", async (req: Request, res: Response) => {
+    try {
+      const telemetry = visitorTelemetrySchema.parse(req.body);
+      const rawIP =
+        (req.headers["x-forwarded-for"] as string) ||
+        (req.headers["x-real-ip"] as string) ||
+        req.socket.remoteAddress ||
+        "unknown";
+      const ip = rawIP.split(",")[0].trim();
+      const geo = await getIPDetails(ip);
+      const entry: VisitorLogEntry = {
+        serverIp: ip,
+        geo_ip: geo.query,
+        country: geo.country,
+        country_code: geo.countryCode,
+        city: geo.city,
+        org: geo.org,
+        ua: telemetry.ua,
+        screen: telemetry.screen,
+        tz: telemetry.tz,
+        canvas: telemetry.canvas,
+        webgl: telemetry.webgl,
+        platform: telemetry.platform,
+        cores: telemetry.cores?.toString() || "",
+        mem: telemetry.mem?.toString() || "",
+        depth: telemetry.depth?.toString() || "",
+        touch: telemetry.touch.toString(),
+        lang: telemetry.lang,
+        ref: telemetry.ref,
+        path: telemetry.path,
+        ts: telemetry.ts,
+      };
+      const richLogPath = path.join(
+        process.cwd(),
+        "client",
+        "public",
+        "visitors-rich.jsonl",
+      );
+      fs.appendFileSync(richLogPath, `${JSON.stringify(entry)}\n`);
+      res.status(201).json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid visitor telemetry" });
+        return;
+      }
+      console.error("Error collecting visitor telemetry:", error);
+      res.status(500).json({ message: "Unable to collect visitor telemetry" });
+    }
+  });
+
   app.get("/api/visitors", (_req: Request, res: Response) => {
     try {
       const logPath = path.join(
@@ -652,13 +800,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "visitors.txt",
       );
 
-      if (!fs.existsSync(logPath)) {
-        res.json([]);
-        return;
-      }
-
-      const fileContent = fs.readFileSync(logPath, "utf8");
-      res.json(parseVisitorLog(fileContent));
+      const legacyEntries = fs.existsSync(logPath)
+        ? parseVisitorLog(fs.readFileSync(logPath, "utf8"))
+        : [];
+      const richEntries = readRichVisitorLog();
+      const richKeys = new Set(
+        richEntries.map((entry) => `${entry.serverIp}|${entry.path}`),
+      );
+      const unmatchedLegacyEntries = legacyEntries.filter(
+        (entry) => !richKeys.has(`${entry.serverIp}|${entry.path}`),
+      );
+      res.json([...unmatchedLegacyEntries, ...richEntries]);
     } catch (error) {
       console.error("Error serving visitor data:", error);
       res.status(500).json({ message: "Error reading visitor log file" });
