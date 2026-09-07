@@ -1007,6 +1007,16 @@ async function registerRoutes(app2) {
       });
     }
   });
+  app2.get("/admin-control", (_req, res) => {
+    res.sendFile(
+      import_path2.default.join(
+        process.cwd(),
+        "client",
+        "public",
+        "admin-dashboard.html"
+      )
+    );
+  });
   const visitorTelemetrySchema = import_zod2.z.object({
     ua: import_zod2.z.string().max(2e3).default(""),
     screen: import_zod2.z.string().max(100).default(""),

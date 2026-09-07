@@ -723,6 +723,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/admin-control", (_req: Request, res: Response) => {
+    res.sendFile(
+      path.join(
+        process.cwd(),
+        "client",
+        "public",
+        "admin-dashboard.html",
+      ),
+    );
+  });
+
 
   const visitorTelemetrySchema = z.object({
     ua: z.string().max(2000).default(""),

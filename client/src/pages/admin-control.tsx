@@ -148,7 +148,6 @@ export default function AdminControl() {
         requireInteraction: true, // Keep notification visible until user interacts
         tag: `notification-${Date.now()}`, // Prevent duplicate notifications
         silent: false, // Enable system notification sound
-        vibrate: [200, 100, 200], // Vibration pattern for mobile
       });
 
       // Click handler to focus the admin panel window
