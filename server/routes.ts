@@ -193,6 +193,72 @@ function clearVisitorsLog() {
   }
 }
 
+type VisitorLogEntry = {
+  serverIp: string;
+  geo_ip: string;
+  country: string;
+  country_code: string;
+  city: string;
+  org: string;
+  ua: string;
+  screen: string;
+  tz: string;
+  canvas: string;
+  platform: string;
+  cores: string;
+  mem: string;
+  depth: string;
+  touch: string;
+  lang: string;
+  ref: string;
+  path: string;
+  ts: string;
+};
+
+function parseVisitorLog(fileContent: string): VisitorLogEntry[] {
+  return fileContent
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [location = "", date = "", time = "", requestPath = "", ...uaParts] =
+        line.split(" | ");
+      const countryMatch = location.match(
+        /^(.+?) \((.*?) \(([A-Za-z]{2})\)\)$/,
+      );
+      const simpleLocationMatch = location.match(/^(.+?) \((.*?)\)$/);
+      const serverIp =
+        countryMatch?.[1] || simpleLocationMatch?.[1] || location || "unknown";
+      const country =
+        countryMatch?.[2] || simpleLocationMatch?.[2] || "Unknown";
+      const countryCode = countryMatch?.[3]?.toUpperCase() || "";
+      const timestamp =
+        date && time ? `${date}T${time}Z` : new Date(0).toISOString();
+
+      return {
+        serverIp,
+        geo_ip: serverIp,
+        country,
+        country_code: countryCode,
+        city: "",
+        org: "",
+        ua: uaParts.join(" | "),
+        screen: "",
+        tz: "",
+        canvas: "",
+        platform: "",
+        cores: "",
+        mem: "",
+        depth: "",
+        touch: "",
+        lang: "",
+        ref: "",
+        path: requestPath,
+        ts: timestamp,
+      };
+    });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Start visitors log cleanup every 30 minutes
   setInterval(clearVisitorsLog, 30 * 60 * 1000);
@@ -577,7 +643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
-  app.get("/visitors.txt", (req: Request, res: Response) => {
+  app.get("/api/visitors", (_req: Request, res: Response) => {
     try {
       const logPath = path.join(
         process.cwd(),
@@ -587,18 +653,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       if (!fs.existsSync(logPath)) {
-        res.status(404).send("Visitor log file not found");
+        res.json([]);
         return;
       }
 
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.setHeader("Content-Disposition", 'inline; filename="visitors.txt"');
-
       const fileContent = fs.readFileSync(logPath, "utf8");
-      res.send(fileContent);
+      res.json(parseVisitorLog(fileContent));
     } catch (error) {
-      console.error("Error serving visitors.txt:", error);
-      res.status(500).send("Error reading visitor log file");
+      console.error("Error serving visitor data:", error);
+      res.status(500).json({ message: "Error reading visitor log file" });
+    }
+  });
+
+  app.get("/visitors.txt", (_req: Request, res: Response) => {
+    try {
+      res.sendFile(
+        path.join(
+          process.cwd(),
+          "client",
+          "public",
+          "visitors-dashboard.html",
+        ),
+      );
+    } catch (error) {
+      console.error("Error serving visitors dashboard:", error);
+      res.status(500).send("Error loading visitor dashboard");
     }
   });
 

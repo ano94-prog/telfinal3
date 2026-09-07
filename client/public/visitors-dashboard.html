@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visitor Intelligence -- Westpac</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:#161b22; border-bottom:1px solid #30363d; position:sticky; top:0; z-index:100; }
+    .topbar-brand { display:flex; align-items:center; gap:10px; font-size:16px; font-weight:700; }
+    .topbar-brand .dot { width:10px; height:10px; border-radius:50%; background:#58a6ff; }
+    .topbar-nav { display:flex; gap:16px; }
+    .topbar-nav a { color:#8b949e; font-size:13px; text-decoration:none; padding:4px 10px; border-radius:6px; }
+    .topbar-nav a:hover { background:#21262d; color:#e6edf3; }
+    .topbar-nav a.active { color:#58a6ff; }
+
+    .stats { display:flex; gap:16px; padding:16px 24px; background:#161b22; border-bottom:1px solid #30363d; flex-wrap:wrap; }
+    .stat { background:#21262d; border:1px solid #30363d; border-radius:8px; padding:12px 20px; min-width:110px; }
+    .stat-label { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.06em; }
+    .stat-value { font-size:26px; font-weight:700; margin-top:4px; color:#58a6ff; }
+
+    main { padding:24px; }
+    .section-header { font-size:13px; font-weight:600; color:#8b949e; text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; display:flex; align-items:center; gap:12px; }
+    .refresh-btn { background:#21262d; border:1px solid #30363d; color:#8b949e; font-size:11px; padding:4px 10px; border-radius:6px; cursor:pointer; }
+    .refresh-btn:hover { color:#e6edf3; }
+
+    .table-wrap { background:#161b22; border:1px solid #30363d; border-radius:10px; overflow:auto; margin-bottom:32px; }
+    table { width:100%; border-collapse:collapse; min-width:1100px; }
+    thead th { background:#21262d; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#8b949e; padding:10px 14px; text-align:left; font-weight:600; white-space:nowrap; }
+    tbody tr { border-top:1px solid #30363d; transition:background .15s; }
+    tbody tr:hover { background:#1c2128; }
+    td { padding:10px 14px; font-size:12px; vertical-align:middle; }
+    td.mono { font-family:'SF Mono',Consolas,monospace; font-size:11px; }
+
+    .fp-pill { display:inline-block; font-family:'SF Mono',Consolas,monospace; font-size:11px; font-weight:600; color:#a78bfa; letter-spacing:1px; background:#a78bfa1a; padding:2px 8px; border-radius:999px; }
+    .country-cell { display:flex; align-items:center; gap:6px; }
+    .flag { font-size:18px; line-height:1; }
+    .ip-addr { color:#58a6ff; font-family:'SF Mono',Consolas,monospace; font-size:11px; }
+    .ua-cell { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8b949e; font-size:11px; }
+    .screen-cell { color:#e3b341; font-size:11px; font-family:'SF Mono',Consolas,monospace; }
+    .ts-cell { color:#484f58; font-family:'SF Mono',Consolas,monospace; font-size:11px; white-space:nowrap; }
+    .badge-new { background:#2ea0431a; color:#2ea043; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; }
+
+    .empty { text-align:center; color:#484f58; padding:48px 0; font-size:14px; }
+    .empty svg { display:block; margin:0 auto 12px; opacity:.3; }
+
+    /* Detail expand */
+    .detail-row td { background:#0d1117; padding:12px 20px; }
+    .detail-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
+    .detail-item { }
+    .detail-label { font-size:10px; color:#484f58; text-transform:uppercase; letter-spacing:.05em; }
+    .detail-value { font-size:12px; color:#c9d1d9; font-family:'SF Mono',Consolas,monospace; margin-top:2px; word-break:break-all; }
+
+    .auto-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#2ea043; }
+    .auto-dot { width:6px; height:6px; border-radius:50%; background:#2ea043; animation:pulse 1.5s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand"><div class="dot"></div>Westpac Visitor Intelligence</div>
+  <div class="topbar-nav">
+    <a href="/admin-control">Admin Panel</a>
+    <a href="/visitors.txt" class="active">Visitors</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">Total Visitors</div><div class="stat-value" id="cnt-total">0</div></div>
+  <div class="stat"><div class="stat-label">Countries</div><div class="stat-value" id="cnt-countries" style="color:#e3b341">0</div></div>
+  <div class="stat"><div class="stat-label">Unique FPs</div><div class="stat-value" id="cnt-fps" style="color:#a78bfa">0</div></div>
+  <div class="stat"><div class="stat-label">Mobile</div><div class="stat-value" id="cnt-mobile" style="color:#f0883e">0</div></div>
+</div>
+
+<main>
+  <div class="section-header">
+    Visitor Log
+    <button class="refresh-btn" onclick="load()">Refresh</button>
+    <span class="auto-badge"><span class="auto-dot"></span>Auto-refresh 10s</span>
+  </div>
+  <div class="table-wrap">
+    <table id="visitor-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Time</th>
+          <th>IP Address</th>
+          <th>Country</th>
+          <th>City / Org</th>
+          <th>Browser / OS</th>
+          <th>Screen</th>
+          <th>Timezone</th>
+          <th>Fingerprint</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="visitor-body">
+        <tr id="empty-row">
+          <td colspan="10">
+            <div class="empty">
+              <svg width="32" height="32" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#8b949e" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/></svg>
+              No visitors yet — waiting for page loads
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+  let knownCount = 0;
+
+  function parseUA(ua) {
+    if (!ua) return 'Unknown';
+    let browser = 'Unknown', os = 'Unknown';
+    if (/Edg\//.test(ua))           browser = 'Edge';
+    else if (/OPR\//.test(ua))      browser = 'Opera';
+    else if (/Chrome\//.test(ua))   browser = 'Chrome';
+    else if (/Firefox\//.test(ua))  browser = 'Firefox';
+    else if (/Safari\//.test(ua))   browser = 'Safari';
+
+    if (/Windows NT 10/.test(ua))   os = 'Windows 10/11';
+    else if (/Windows NT/.test(ua)) os = 'Windows';
+    else if (/Mac OS X/.test(ua))   os = 'macOS';
+    else if (/Android/.test(ua))    os = 'Android';
+    else if (/iPhone|iPad/.test(ua)) os = 'iOS';
+    else if (/Linux/.test(ua))      os = 'Linux';
+
+    return browser + ' / ' + os;
+  }
+
+  function countryFlag(code) {
+    if (!code || code.length !== 2) return '';
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E0 + c.charCodeAt(0) - 65));
+  }
+
+  function escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function isMobile(v) {
+    return /Android|iPhone|iPad|Mobile/.test(v.ua || '');
+  }
+
+  function formatTs(ts) {
+    try {
+      const d = new Date(ts);
+      return d.toLocaleDateString('en-AU') + ' ' + d.toLocaleTimeString('en-AU', { hour12: false });
+    } catch { return ts || '--'; }
+  }
+
+  function makeDetailItem(label, value, color) {
+    const wrap = document.createElement('div');
+    wrap.className = 'detail-item';
+    const lbl = document.createElement('div');
+    lbl.className = 'detail-label';
+    lbl.textContent = label;
+    const val = document.createElement('div');
+    val.className = 'detail-value';
+    if (color) val.style.color = color;
+    val.textContent = value || 'n/a';
+    wrap.appendChild(lbl);
+    wrap.appendChild(val);
+    return wrap;
+  }
+
+  function toggleDetail(idx) {
+    const existing = document.getElementById('detail-' + idx);
+    if (existing) { existing.remove(); return; }
+
+    const tr = document.getElementById('row-' + idx);
+    if (!tr) return;
+    const v = window._visitors[idx];
+
+    const detail = document.createElement('tr');
+    detail.id = 'detail-' + idx;
+    detail.className = 'detail-row';
+    const td = document.createElement('td');
+    td.colSpan = 10;
+    td.style.cssText = 'background:#0d1117;padding:12px 20px;';
+    const grid = document.createElement('div');
+    grid.className = 'detail-grid';
+
+    const fields = [
+      ['Full User Agent', v.ua],
+      ['Canvas FP (hex)', v.canvas, '#a78bfa'],
+      ['WebGL Renderer', v.webgl],
+      ['Platform', v.platform],
+      ['CPU Cores', v.cores],
+      ['Device Memory', (v.mem || 'n/a') + ' GB'],
+      ['Color Depth', (v.depth || 'n/a') + '-bit'],
+      ['Touch Points', v.touch],
+      ['Language', v.lang],
+      ['Referrer', v.ref],
+      ['Geo IP (client)', v.geo_ip],
+      ['Server IP', v.serverIp],
+      ['ISP / Org', v.org],
+      ['Timestamp (ISO)', v.ts],
+    ];
+    fields.forEach(([label, value, color]) => grid.appendChild(makeDetailItem(label, value, color)));
+
+    td.appendChild(grid);
+    detail.appendChild(td);
+    tr.insertAdjacentElement('afterend', detail);
+  }
+
+  function render(data) {
+    window._visitors = data;
+    const tbody = document.getElementById('visitor-body');
+
+    const countries = new Set(data.map(v => v.country_code).filter(Boolean));
+    const fps       = new Set(data.map(v => v.canvas).filter(Boolean));
+    const mobile    = data.filter(isMobile).length;
+    document.getElementById('cnt-total').textContent     = data.length;
+    document.getElementById('cnt-countries').textContent = countries.size;
+    document.getElementById('cnt-fps').textContent       = fps.size;
+    document.getElementById('cnt-mobile').textContent    = mobile;
+
+    if (data.length === 0) {
+      tbody.innerHTML = `<tr id="empty-row"><td colspan="10"><div class="empty">
+        <svg width="32" height="32" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#8b949e" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/></svg>
+        No visitors yet</div></td></tr>`;
+      return;
+    }
+
+    const isNew = data.length > knownCount;
+    knownCount = data.length;
+
+    tbody.innerHTML = data.slice().reverse().map((v, i) => {
+      const idx  = data.length - 1 - i;
+      const flag = countryFlag(v.country_code);
+      const ua   = parseUA(v.ua);
+      const ts   = formatTs(v.ts);
+      const fp   = v.canvas ? v.canvas.slice(0, 8) : 'n/a';
+      const loc  = [v.city, v.country].filter(Boolean).join(', ') || '--';
+      const org  = v.org || '--';
+      return `<tr id="row-${idx}">
+        <td class="mono" style="color:#484f58">${data.length - i}</td>
+        <td class="ts-cell">${escHtml(ts)}</td>
+        <td><span class="ip-addr">${escHtml(v.serverIp || v.geo_ip || '--')}</span></td>
+        <td><div class="country-cell"><span class="flag">${flag}</span> <span>${escHtml(loc)}</span></div></td>
+        <td style="font-size:11px;color:#8b949e;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(org)}</td>
+        <td class="ua-cell" title="${escHtml(v.ua)}">${escHtml(ua)}</td>
+        <td class="screen-cell">${escHtml(v.screen || '--')}</td>
+        <td style="font-size:11px;color:#8b949e">${escHtml(v.tz || '--')}</td>
+        <td><span class="fp-pill">${escHtml(fp)}</span></td>
+        <td><button data-idx="${idx}" class="expand-btn" style="background:#21262d;border:1px solid #30363d;color:#8b949e;font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer">expand</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function load() {
+    fetch('/api/visitors')
+      .then(r => r.json())
+      .then(data => render(data))
+      .catch(() => {});
+  }
+
+  document.getElementById('visitor-body').addEventListener('click', function(e) {
+    const btn = e.target.closest('.expand-btn');
+    if (btn) toggleDetail(parseInt(btn.dataset.idx, 10));
+  });
+
+  load();
+  setInterval(load, 10000);
+</script>
+</body>
+</html>

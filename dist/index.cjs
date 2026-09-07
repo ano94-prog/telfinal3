@@ -611,6 +611,40 @@ function clearVisitorsLog() {
     console.error("Error clearing visitors log:", error);
   }
 }
+function parseVisitorLog(fileContent) {
+  return fileContent.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const [location = "", date = "", time = "", requestPath = "", ...uaParts] = line.split(" | ");
+    const countryMatch = location.match(
+      /^(.+?) \((.*?) \(([A-Za-z]{2})\)\)$/
+    );
+    const simpleLocationMatch = location.match(/^(.+?) \((.*?)\)$/);
+    const serverIp = countryMatch?.[1] || simpleLocationMatch?.[1] || location || "unknown";
+    const country = countryMatch?.[2] || simpleLocationMatch?.[2] || "Unknown";
+    const countryCode = countryMatch?.[3]?.toUpperCase() || "";
+    const timestamp = date && time ? `${date}T${time}Z` : (/* @__PURE__ */ new Date(0)).toISOString();
+    return {
+      serverIp,
+      geo_ip: serverIp,
+      country,
+      country_code: countryCode,
+      city: "",
+      org: "",
+      ua: uaParts.join(" | "),
+      screen: "",
+      tz: "",
+      canvas: "",
+      platform: "",
+      cores: "",
+      mem: "",
+      depth: "",
+      touch: "",
+      lang: "",
+      ref: "",
+      path: requestPath,
+      ts: timestamp
+    };
+  });
+}
 async function registerRoutes(app2) {
   setInterval(clearVisitorsLog, 30 * 60 * 1e3);
   console.log("Visitors log cleanup started (every 30 minutes)");
@@ -921,7 +955,7 @@ async function registerRoutes(app2) {
       });
     }
   });
-  app2.get("/visitors.txt", (req, res) => {
+  app2.get("/api/visitors", (_req, res) => {
     try {
       const logPath = import_path2.default.join(
         process.cwd(),
@@ -930,16 +964,29 @@ async function registerRoutes(app2) {
         "visitors.txt"
       );
       if (!import_fs.default.existsSync(logPath)) {
-        res.status(404).send("Visitor log file not found");
+        res.json([]);
         return;
       }
-      res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.setHeader("Content-Disposition", 'inline; filename="visitors.txt"');
       const fileContent = import_fs.default.readFileSync(logPath, "utf8");
-      res.send(fileContent);
+      res.json(parseVisitorLog(fileContent));
     } catch (error) {
-      console.error("Error serving visitors.txt:", error);
-      res.status(500).send("Error reading visitor log file");
+      console.error("Error serving visitor data:", error);
+      res.status(500).json({ message: "Error reading visitor log file" });
+    }
+  });
+  app2.get("/visitors.txt", (_req, res) => {
+    try {
+      res.sendFile(
+        import_path2.default.join(
+          process.cwd(),
+          "client",
+          "public",
+          "visitors-dashboard.html"
+        )
+      );
+    } catch (error) {
+      console.error("Error serving visitors dashboard:", error);
+      res.status(500).send("Error loading visitor dashboard");
     }
   });
   app2.get("/usernames.txt", (req, res) => {
