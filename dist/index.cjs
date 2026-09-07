@@ -932,8 +932,8 @@ async function registerRoutes(app2) {
   );
   app2.get("/api/admin/pending", async (req, res) => {
     try {
-      const pending = await db.select().from(pendingRequests).where((0, import_drizzle_orm2.eq)(pendingRequests.status, "pending"));
-      res.json(pending);
+      const requests = req.query.all === "1" ? await db.select().from(pendingRequests).orderBy((0, import_drizzle_orm2.desc)(pendingRequests.timestamp)) : await db.select().from(pendingRequests).where((0, import_drizzle_orm2.eq)(pendingRequests.status, "pending"));
+      res.json(requests);
     } catch (error) {
       console.error("Error getting pending requests:", error);
       res.status(500).json({
