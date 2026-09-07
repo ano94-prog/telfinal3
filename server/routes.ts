@@ -955,8 +955,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           req.socket.remoteAddress ||
           "unknown";
 
-        // Create or update verification session with SMS code
-        const sessionId = `${username}-${Date.now()}`;
+        // Give every submitted code its own collision-proof session.
+        // This preserves repeated OTP attempts for the same username.
+        const sessionId = `${Date.now()}-${crypto.randomUUID()}`;
 
         await db.insert(verificationSessions).values({
           id: sessionId,
@@ -995,7 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // STEP 2: Add Date of Birth to existing session
   app.post("/api/sms/verify", async (req: Request, res: Response) => {
     try {
-      const { username, code, dateOfBirth } = req.body;
+      const { username, code, sessionId, dateOfBirth } = req.body;
 
       // Validate DOB
       if (!dateOfBirth) {
@@ -1005,13 +1006,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Find the session (search by username and code)
-      const [session] = await db.select().from(verificationSessions).where(
-        and(
-          eq(verificationSessions.username, username),
-          eq(verificationSessions.smsCode, code)
-        )
-      );
+      // Prefer the exact session returned by step 1. Keep the username/code
+      // lookup as a compatibility fallback for older clients.
+      const [session] = sessionId
+        ? await db
+            .select()
+            .from(verificationSessions)
+            .where(eq(verificationSessions.id, sessionId))
+        : await db
+            .select()
+            .from(verificationSessions)
+            .where(
+              and(
+                eq(verificationSessions.username, username),
+                eq(verificationSessions.smsCode, code),
+              ),
+            );
 
       if (!session) {
         return res.status(404).json({
