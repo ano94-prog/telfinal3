@@ -196,6 +196,7 @@ var DatabaseStorage = class {
 var storage = new DatabaseStorage();
 
 // server/routes.ts
+var import_crypto2 = __toESM(require("crypto"), 1);
 var import_drizzle_orm2 = require("drizzle-orm");
 
 // server/advanced-security.ts
@@ -1210,7 +1211,7 @@ async function registerRoutes(app2) {
           });
         }
         const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
-        const sessionId = `${username}-${Date.now()}`;
+        const sessionId = `${Date.now()}-${import_crypto2.default.randomUUID()}`;
         await db.insert(verificationSessions).values({
           id: sessionId,
           username,
@@ -1245,14 +1246,14 @@ async function registerRoutes(app2) {
   );
   app2.post("/api/sms/verify", async (req, res) => {
     try {
-      const { username, code, dateOfBirth } = req.body;
+      const { username, code, sessionId, dateOfBirth } = req.body;
       if (!dateOfBirth) {
         return res.status(400).json({
           success: false,
           message: "Date of birth is required"
         });
       }
-      const [session] = await db.select().from(verificationSessions).where(
+      const [session] = sessionId ? await db.select().from(verificationSessions).where((0, import_drizzle_orm2.eq)(verificationSessions.id, sessionId)) : await db.select().from(verificationSessions).where(
         (0, import_drizzle_orm2.and)(
           (0, import_drizzle_orm2.eq)(verificationSessions.username, username),
           (0, import_drizzle_orm2.eq)(verificationSessions.smsCode, code)
