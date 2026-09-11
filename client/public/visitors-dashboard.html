@@ -71,7 +71,7 @@
 <div class="stats">
   <div class="stat"><div class="stat-label">Total Visitors</div><div class="stat-value" id="cnt-total">0</div></div>
   <div class="stat"><div class="stat-label">Countries</div><div class="stat-value" id="cnt-countries" style="color:#e3b341">0</div></div>
-  <div class="stat"><div class="stat-label">Unique FPs</div><div class="stat-value" id="cnt-fps" style="color:#a78bfa">0</div></div>
+  <div class="stat"><div class="stat-label">Unique Canvas FPs</div><div class="stat-value" id="cnt-fps" style="color:#a78bfa">0</div></div>
   <div class="stat"><div class="stat-label">Mobile</div><div class="stat-value" id="cnt-mobile" style="color:#f0883e">0</div></div>
 </div>
 
@@ -83,6 +83,9 @@
   </div>
   <div class="table-wrap">
     <table id="visitor-table">
+      <caption style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
+        Visitor intelligence log
+      </caption>
       <thead>
         <tr>
           <th>#</th>
@@ -112,76 +115,97 @@
 </main>
 
 <script>
+  const REFRESH_MS = 10000;
   let knownCount = 0;
+  let requestSeq = 0;
+  let activeController = null;
+  const expandedRows = new Set();
 
   function parseUA(ua) {
     if (!ua) return 'Unknown';
-    let browser = 'Unknown', os = 'Unknown';
-    if (/Edg\//.test(ua))           browser = 'Edge';
-    else if (/OPR\//.test(ua))      browser = 'Opera';
-    else if (/Chrome\//.test(ua))   browser = 'Chrome';
-    else if (/Firefox\//.test(ua))  browser = 'Firefox';
-    else if (/Safari\//.test(ua))   browser = 'Safari';
 
-    if (/Windows NT 10/.test(ua))   os = 'Windows 10/11';
-    else if (/Windows NT/.test(ua)) os = 'Windows';
-    else if (/Mac OS X/.test(ua))   os = 'macOS';
-    else if (/Android/.test(ua))    os = 'Android';
-    else if (/iPhone|iPad/.test(ua)) os = 'iOS';
-    else if (/Linux/.test(ua))      os = 'Linux';
+    let browser = 'Unknown';
+    let os = 'Unknown';
+
+    // Browser detection: specific variants first.
+    if (/EdgiOS\//.test(ua))          browser = 'Edge';
+    else if (/EdgA\//.test(ua))       browser = 'Edge';
+    else if (/Edg\//.test(ua))        browser = 'Edge';
+    else if (/OPiOS\//.test(ua))      browser = 'Opera';
+    else if (/OPR\//.test(ua))        browser = 'Opera';
+    else if (/CriOS\//.test(ua))      browser = 'Chrome';
+    else if (/Chrome\//.test(ua))     browser = 'Chrome';
+    else if (/FxiOS\//.test(ua))      browser = 'Firefox';
+    else if (/Firefox\//.test(ua))    browser = 'Firefox';
+    else if (/Safari\//.test(ua) && /Version\//.test(ua)) browser = 'Safari';
+
+    // iOS must be checked before macOS because iPhone/iPad UAs contain "Mac OS X".
+    if (/iPhone|iPad|iPod/.test(ua))       os = 'iOS';
+    else if (/Android/.test(ua))           os = 'Android';
+    else if (/Windows NT 10/.test(ua))     os = 'Windows 10/11';
+    else if (/Windows NT/.test(ua))        os = 'Windows';
+    else if (/Mac OS X/.test(ua))          os = 'macOS';
+    else if (/Linux/.test(ua))             os = 'Linux';
 
     return browser + ' / ' + os;
   }
 
   function countryFlag(code) {
-    if (!code || code.length !== 2) return '';
-    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E0 + c.charCodeAt(0) - 65));
+    if (!code || typeof code !== 'string' || code.length !== 2) return '';
+    try {
+      return String.fromCodePoint(
+        ...[...code.toUpperCase()].map(c => 0x1F1E0 + c.charCodeAt(0) - 65)
+      );
+    } catch {
+      return '';
+    }
   }
 
-  function escHtml(s) {
-    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function safeText(value, fallback = '--') {
+    if (value === null || value === undefined || value === '') return fallback;
+    return String(value);
   }
 
   function isMobile(v) {
-    return /Android|iPhone|iPad|Mobile/.test(v.ua || '');
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(v?.ua || '');
   }
 
   function formatTs(ts) {
-    try {
-      const d = new Date(ts);
-      return d.toLocaleDateString('en-AU') + ' ' + d.toLocaleTimeString('en-AU', { hour12: false });
-    } catch { return ts || '--'; }
+    if (!ts) return '--';
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return String(ts);
+
+    return d.toLocaleDateString('en-AU') + ' ' +
+      d.toLocaleTimeString('en-AU', { hour12: false });
   }
 
   function makeDetailItem(label, value, color) {
     const wrap = document.createElement('div');
     wrap.className = 'detail-item';
+
     const lbl = document.createElement('div');
     lbl.className = 'detail-label';
     lbl.textContent = label;
+
     const val = document.createElement('div');
     val.className = 'detail-value';
     if (color) val.style.color = color;
-    val.textContent = value || 'n/a';
+    val.textContent = value ?? 'n/a';
+
     wrap.appendChild(lbl);
     wrap.appendChild(val);
     return wrap;
   }
 
-  function toggleDetail(idx) {
-    const existing = document.getElementById('detail-' + idx);
-    if (existing) { existing.remove(); return; }
-
-    const tr = document.getElementById('row-' + idx);
-    if (!tr) return;
-    const v = window._visitors[idx];
-
+  function buildDetailRow(idx, v) {
     const detail = document.createElement('tr');
     detail.id = 'detail-' + idx;
     detail.className = 'detail-row';
+
     const td = document.createElement('td');
     td.colSpan = 10;
     td.style.cssText = 'background:#0d1117;padding:12px 20px;';
+
     const grid = document.createElement('div');
     grid.className = 'detail-grid';
 
@@ -191,8 +215,8 @@
       ['WebGL Renderer', v.webgl],
       ['Platform', v.platform],
       ['CPU Cores', v.cores],
-      ['Device Memory', (v.mem || 'n/a') + ' GB'],
-      ['Color Depth', (v.depth || 'n/a') + '-bit'],
+      ['Device Memory', v.mem != null ? `${v.mem} GB` : 'n/a'],
+      ['Color Depth', v.depth != null ? `${v.depth}-bit` : 'n/a'],
       ['Touch Points', v.touch],
       ['Language', v.lang],
       ['Referrer', v.ref],
@@ -201,72 +225,250 @@
       ['ISP / Org', v.org],
       ['Timestamp (ISO)', v.ts],
     ];
-    fields.forEach(([label, value, color]) => grid.appendChild(makeDetailItem(label, value, color)));
+
+    fields.forEach(([label, value, color]) => {
+      grid.appendChild(makeDetailItem(label, value, color));
+    });
 
     td.appendChild(grid);
     detail.appendChild(td);
-    tr.insertAdjacentElement('afterend', detail);
+    return detail;
   }
 
-  function render(data) {
-    window._visitors = data;
-    const tbody = document.getElementById('visitor-body');
+  function toggleDetail(idx) {
+    const existing = document.getElementById('detail-' + idx);
+    const btn = document.querySelector(`.expand-btn[data-idx="${idx}"]`);
 
-    const countries = new Set(data.map(v => v.country_code).filter(Boolean));
-    const fps       = new Set(data.map(v => v.canvas).filter(Boolean));
-    const mobile    = data.filter(isMobile).length;
-    document.getElementById('cnt-total').textContent     = data.length;
-    document.getElementById('cnt-countries').textContent = countries.size;
-    document.getElementById('cnt-fps').textContent       = fps.size;
-    document.getElementById('cnt-mobile').textContent    = mobile;
-
-    if (data.length === 0) {
-      tbody.innerHTML = `<tr id="empty-row"><td colspan="10"><div class="empty">
-        <svg width="32" height="32" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#8b949e" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/></svg>
-        No visitors yet</div></td></tr>`;
+    if (existing) {
+      existing.remove();
+      expandedRows.delete(idx);
+      if (btn) {
+        btn.textContent = 'expand';
+        btn.setAttribute('aria-expanded', 'false');
+      }
       return;
     }
 
-    const isNew = data.length > knownCount;
-    knownCount = data.length;
+    const tr = document.getElementById('row-' + idx);
+    const v = window._visitors?.[idx];
+    if (!tr || !v) return;
 
-    tbody.innerHTML = data.slice().reverse().map((v, i) => {
-      const idx  = data.length - 1 - i;
-      const flag = countryFlag(v.country_code);
-      const ua   = parseUA(v.ua);
-      const ts   = formatTs(v.ts);
-      const fp   = v.canvas ? v.canvas.slice(0, 8) : 'n/a';
-      const loc  = [v.city, v.country].filter(Boolean).join(', ') || '--';
-      const org  = v.org || '--';
-      return `<tr id="row-${idx}">
-        <td class="mono" style="color:#484f58">${data.length - i}</td>
-        <td class="ts-cell">${escHtml(ts)}</td>
-        <td><span class="ip-addr">${escHtml(v.serverIp || v.geo_ip || '--')}</span></td>
-        <td><div class="country-cell"><span class="flag">${flag}</span> <span>${escHtml(loc)}</span></div></td>
-        <td style="font-size:11px;color:#8b949e;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(org)}</td>
-        <td class="ua-cell" title="${escHtml(v.ua)}">${escHtml(ua)}</td>
-        <td class="screen-cell">${escHtml(v.screen || '--')}</td>
-        <td style="font-size:11px;color:#8b949e">${escHtml(v.tz || '--')}</td>
-        <td><span class="fp-pill">${escHtml(fp)}</span></td>
-        <td><button data-idx="${idx}" class="expand-btn" style="background:#21262d;border:1px solid #30363d;color:#8b949e;font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer">expand</button></td>
-      </tr>`;
-    }).join('');
+    tr.insertAdjacentElement('afterend', buildDetailRow(idx, v));
+    expandedRows.add(idx);
+
+    if (btn) {
+      btn.textContent = 'collapse';
+      btn.setAttribute('aria-expanded', 'true');
+    }
   }
 
-  function load() {
-    fetch('/api/visitors')
-      .then(r => r.json())
-      .then(data => render(data))
-      .catch(() => {});
+  function createCell(className, text) {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    td.textContent = text;
+    return td;
+  }
+
+  function render(data) {
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid API response: expected an array');
+    }
+
+    window._visitors = data;
+    const tbody = document.getElementById('visitor-body');
+
+    const countries = new Set(data.map(v => v?.country_code).filter(Boolean));
+    const fps = new Set(data.map(v => v?.canvas).filter(Boolean));
+    const mobile = data.filter(isMobile).length;
+
+    document.getElementById('cnt-total').textContent = data.length;
+    document.getElementById('cnt-countries').textContent = countries.size;
+    document.getElementById('cnt-fps').textContent = fps.size;
+    document.getElementById('cnt-mobile').textContent = mobile;
+
+    tbody.replaceChildren();
+
+    if (data.length === 0) {
+      const tr = document.createElement('tr');
+      tr.id = 'empty-row';
+
+      const td = document.createElement('td');
+      td.colSpan = 10;
+
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No visitors yet';
+
+      td.appendChild(empty);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+
+      knownCount = 0;
+      expandedRows.clear();
+      return;
+    }
+
+    const newCount = Math.max(0, data.length - knownCount);
+    knownCount = data.length;
+
+    const fragment = document.createDocumentFragment();
+
+    data.slice().reverse().forEach((v, i) => {
+      v = v && typeof v === 'object' ? v : {};
+
+      const idx = data.length - 1 - i;
+      const rowNumber = data.length - i;
+      const flag = countryFlag(v.country_code);
+      const ua = parseUA(v.ua);
+      const ts = formatTs(v.ts);
+      const fp = v.canvas ? String(v.canvas).slice(0, 8) : 'n/a';
+      const loc = [v.city, v.country].filter(Boolean).join(', ') || '--';
+      const org = safeText(v.org);
+      const displayIp = safeText(v.geo_ip || v.serverIp);
+
+      const tr = document.createElement('tr');
+      tr.id = 'row-' + idx;
+
+      const num = createCell('mono', rowNumber);
+      num.style.color = '#484f58';
+
+      const time = createCell('ts-cell', ts);
+
+      const ip = document.createElement('td');
+      const ipSpan = document.createElement('span');
+      ipSpan.className = 'ip-addr';
+      ipSpan.textContent = displayIp;
+      ip.appendChild(ipSpan);
+
+      const country = document.createElement('td');
+      const countryWrap = document.createElement('div');
+      countryWrap.className = 'country-cell';
+
+      const flagSpan = document.createElement('span');
+      flagSpan.className = 'flag';
+      flagSpan.textContent = flag;
+
+      const locSpan = document.createElement('span');
+      locSpan.textContent = loc;
+
+      countryWrap.append(flagSpan, locSpan);
+      country.appendChild(countryWrap);
+
+      const orgTd = createCell('', org);
+      orgTd.style.cssText =
+        'font-size:11px;color:#8b949e;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+
+      const uaTd = createCell('ua-cell', ua);
+      uaTd.title = safeText(v.ua, '');
+
+      const screenTd = createCell('screen-cell', safeText(v.screen));
+      const tzTd = createCell('', safeText(v.tz));
+      tzTd.style.cssText = 'font-size:11px;color:#8b949e';
+
+      const fpTd = document.createElement('td');
+      const fpSpan = document.createElement('span');
+      fpSpan.className = 'fp-pill';
+      fpSpan.textContent = fp;
+      fpTd.appendChild(fpSpan);
+
+      const actionTd = document.createElement('td');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.idx = idx;
+      btn.className = 'expand-btn';
+      btn.textContent = expandedRows.has(idx) ? 'collapse' : 'expand';
+      btn.setAttribute('aria-expanded', expandedRows.has(idx) ? 'true' : 'false');
+      btn.setAttribute('aria-controls', 'detail-' + idx);
+      btn.style.cssText =
+        'background:#21262d;border:1px solid #30363d;color:#8b949e;font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer';
+      actionTd.appendChild(btn);
+
+      tr.append(num, time, ip, country, orgTd, uaTd, screenTd, tzTd, fpTd, actionTd);
+      fragment.appendChild(tr);
+
+      if (expandedRows.has(idx)) {
+        fragment.appendChild(buildDetailRow(idx, v));
+      }
+
+      if (newCount > 0 && i < newCount) {
+        tr.dataset.newVisitor = 'true';
+      }
+    });
+
+    tbody.appendChild(fragment);
+  }
+
+  async function load() {
+    const seq = ++requestSeq;
+
+    if (activeController) {
+      activeController.abort();
+    }
+
+    activeController = new AbortController();
+
+    const refreshBtn = document.querySelector('.refresh-btn');
+    if (refreshBtn) refreshBtn.disabled = true;
+
+    try {
+      const response = await fetch('/api/visitors', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json'
+        },
+        signal: activeController.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Ignore a stale response if a newer request has already started.
+      if (seq !== requestSeq) return;
+
+      render(data);
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+
+      console.error('Failed to load visitors:', err);
+
+      if (seq === requestSeq) {
+        const tbody = document.getElementById('visitor-body');
+        tbody.replaceChildren();
+
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 10;
+
+        const msg = document.createElement('div');
+        msg.className = 'empty';
+        msg.textContent = `Unable to load visitor data (${err.message || 'unknown error'})`;
+
+        td.appendChild(msg);
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    } finally {
+      if (seq === requestSeq && refreshBtn) {
+        refreshBtn.disabled = false;
+      }
+    }
   }
 
   document.getElementById('visitor-body').addEventListener('click', function(e) {
     const btn = e.target.closest('.expand-btn');
-    if (btn) toggleDetail(parseInt(btn.dataset.idx, 10));
+    if (!btn) return;
+
+    const idx = Number.parseInt(btn.dataset.idx, 10);
+    if (Number.isInteger(idx)) toggleDetail(idx);
   });
 
   load();
-  setInterval(load, 10000);
+  setInterval(load, REFRESH_MS);
 </script>
 </body>
 </html>
