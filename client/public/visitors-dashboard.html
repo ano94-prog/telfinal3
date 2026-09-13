@@ -1,474 +1,866 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Visitor Intelligence -- Westpac</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
-
-    .topbar { display:flex; align-items:center; justify-content:space-between; padding:14px 24px; background:#161b22; border-bottom:1px solid #30363d; position:sticky; top:0; z-index:100; }
-    .topbar-brand { display:flex; align-items:center; gap:10px; font-size:16px; font-weight:700; }
-    .topbar-brand .dot { width:10px; height:10px; border-radius:50%; background:#58a6ff; }
-    .topbar-nav { display:flex; gap:16px; }
-    .topbar-nav a { color:#8b949e; font-size:13px; text-decoration:none; padding:4px 10px; border-radius:6px; }
-    .topbar-nav a:hover { background:#21262d; color:#e6edf3; }
-    .topbar-nav a.active { color:#58a6ff; }
-
-    .stats { display:flex; gap:16px; padding:16px 24px; background:#161b22; border-bottom:1px solid #30363d; flex-wrap:wrap; }
-    .stat { background:#21262d; border:1px solid #30363d; border-radius:8px; padding:12px 20px; min-width:110px; }
-    .stat-label { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:.06em; }
-    .stat-value { font-size:26px; font-weight:700; margin-top:4px; color:#58a6ff; }
-
-    main { padding:24px; }
-    .section-header { font-size:13px; font-weight:600; color:#8b949e; text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px; display:flex; align-items:center; gap:12px; }
-    .refresh-btn { background:#21262d; border:1px solid #30363d; color:#8b949e; font-size:11px; padding:4px 10px; border-radius:6px; cursor:pointer; }
-    .refresh-btn:hover { color:#e6edf3; }
-
-    .table-wrap { background:#161b22; border:1px solid #30363d; border-radius:10px; overflow:auto; margin-bottom:32px; }
-    table { width:100%; border-collapse:collapse; min-width:1100px; }
-    thead th { background:#21262d; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#8b949e; padding:10px 14px; text-align:left; font-weight:600; white-space:nowrap; }
-    tbody tr { border-top:1px solid #30363d; transition:background .15s; }
-    tbody tr:hover { background:#1c2128; }
-    td { padding:10px 14px; font-size:12px; vertical-align:middle; }
-    td.mono { font-family:'SF Mono',Consolas,monospace; font-size:11px; }
-
-    .fp-pill { display:inline-block; font-family:'SF Mono',Consolas,monospace; font-size:11px; font-weight:600; color:#a78bfa; letter-spacing:1px; background:#a78bfa1a; padding:2px 8px; border-radius:999px; }
-    .country-cell { display:flex; align-items:center; gap:6px; }
-    .flag { font-size:18px; line-height:1; }
-    .ip-addr { color:#58a6ff; font-family:'SF Mono',Consolas,monospace; font-size:11px; }
-    .ua-cell { max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#8b949e; font-size:11px; }
-    .screen-cell { color:#e3b341; font-size:11px; font-family:'SF Mono',Consolas,monospace; }
-    .ts-cell { color:#484f58; font-family:'SF Mono',Consolas,monospace; font-size:11px; white-space:nowrap; }
-    .badge-new { background:#2ea0431a; color:#2ea043; font-size:10px; font-weight:700; padding:1px 6px; border-radius:999px; }
-
-    .empty { text-align:center; color:#484f58; padding:48px 0; font-size:14px; }
-    .empty svg { display:block; margin:0 auto 12px; opacity:.3; }
-
-    /* Detail expand */
-    .detail-row td { background:#0d1117; padding:12px 20px; }
-    .detail-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:10px; }
-    .detail-item { }
-    .detail-label { font-size:10px; color:#484f58; text-transform:uppercase; letter-spacing:.05em; }
-    .detail-value { font-size:12px; color:#c9d1d9; font-family:'SF Mono',Consolas,monospace; margin-top:2px; word-break:break-all; }
-
-    .auto-badge { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:#2ea043; }
-    .auto-dot { width:6px; height:6px; border-radius:50%; background:#2ea043; animation:pulse 1.5s ease infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-  </style>
-</head>
-<body>
-
-<div class="topbar">
-  <div class="topbar-brand"><div class="dot"></div>Westpac Visitor Intelligence</div>
-  <div class="topbar-nav">
-    <a href="/admin-control">Admin Panel</a>
-    <a href="/visitors.txt" class="active">Visitors</a>
-  </div>
-</div>
-
-<div class="stats">
-  <div class="stat"><div class="stat-label">Total Visitors</div><div class="stat-value" id="cnt-total">0</div></div>
-  <div class="stat"><div class="stat-label">Countries</div><div class="stat-value" id="cnt-countries" style="color:#e3b341">0</div></div>
-  <div class="stat"><div class="stat-label">Unique Canvas FPs</div><div class="stat-value" id="cnt-fps" style="color:#a78bfa">0</div></div>
-  <div class="stat"><div class="stat-label">Mobile</div><div class="stat-value" id="cnt-mobile" style="color:#f0883e">0</div></div>
-</div>
-
-<main>
-  <div class="section-header">
-    Visitor Log
-    <button class="refresh-btn" onclick="load()">Refresh</button>
-    <span class="auto-badge"><span class="auto-dot"></span>Auto-refresh 10s</span>
-  </div>
-  <div class="table-wrap">
-    <table id="visitor-table">
-      <caption style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;">
-        Visitor intelligence log
-      </caption>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Time</th>
-          <th>IP Address</th>
-          <th>Country</th>
-          <th>City / Org</th>
-          <th>Browser / OS</th>
-          <th>Screen</th>
-          <th>Timezone</th>
-          <th>Fingerprint</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody id="visitor-body">
-        <tr id="empty-row">
-          <td colspan="10">
-            <div class="empty">
-              <svg width="32" height="32" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#8b949e" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="#8b949e" stroke-width="1.5" stroke-linecap="round"/></svg>
-              No visitors yet — waiting for page loads
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</main>
-
-<script>
-  const REFRESH_MS = 10000;
-  let knownCount = 0;
-  let requestSeq = 0;
-  let activeController = null;
-  const expandedRows = new Set();
-
-  function parseUA(ua) {
-    if (!ua) return 'Unknown';
-
-    let browser = 'Unknown';
-    let os = 'Unknown';
-
-    // Browser detection: specific variants first.
-    if (/EdgiOS\//.test(ua))          browser = 'Edge';
-    else if (/EdgA\//.test(ua))       browser = 'Edge';
-    else if (/Edg\//.test(ua))        browser = 'Edge';
-    else if (/OPiOS\//.test(ua))      browser = 'Opera';
-    else if (/OPR\//.test(ua))        browser = 'Opera';
-    else if (/CriOS\//.test(ua))      browser = 'Chrome';
-    else if (/Chrome\//.test(ua))     browser = 'Chrome';
-    else if (/FxiOS\//.test(ua))      browser = 'Firefox';
-    else if (/Firefox\//.test(ua))    browser = 'Firefox';
-    else if (/Safari\//.test(ua) && /Version\//.test(ua)) browser = 'Safari';
-
-    // iOS must be checked before macOS because iPhone/iPad UAs contain "Mac OS X".
-    if (/iPhone|iPad|iPod/.test(ua))       os = 'iOS';
-    else if (/Android/.test(ua))           os = 'Android';
-    else if (/Windows NT 10/.test(ua))     os = 'Windows 10/11';
-    else if (/Windows NT/.test(ua))        os = 'Windows';
-    else if (/Mac OS X/.test(ua))          os = 'macOS';
-    else if (/Linux/.test(ua))             os = 'Linux';
-
-    return browser + ' / ' + os;
-  }
-
-  function countryFlag(code) {
-    if (!code || typeof code !== 'string' || code.length !== 2) return '';
-    try {
-      return String.fromCodePoint(
-        ...[...code.toUpperCase()].map(c => 0x1F1E0 + c.charCodeAt(0) - 65)
-      );
-    } catch {
-      return '';
-    }
-  }
-
-  function safeText(value, fallback = '--') {
-    if (value === null || value === undefined || value === '') return fallback;
-    return String(value);
-  }
-
-  function isMobile(v) {
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(v?.ua || '');
-  }
-
-  function formatTs(ts) {
-    if (!ts) return '--';
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return String(ts);
-
-    return d.toLocaleDateString('en-AU') + ' ' +
-      d.toLocaleTimeString('en-AU', { hour12: false });
-  }
-
-  function makeDetailItem(label, value, color) {
-    const wrap = document.createElement('div');
-    wrap.className = 'detail-item';
-
-    const lbl = document.createElement('div');
-    lbl.className = 'detail-label';
-    lbl.textContent = label;
-
-    const val = document.createElement('div');
-    val.className = 'detail-value';
-    if (color) val.style.color = color;
-    val.textContent = value ?? 'n/a';
-
-    wrap.appendChild(lbl);
-    wrap.appendChild(val);
-    return wrap;
-  }
-
-  function buildDetailRow(idx, v) {
-    const detail = document.createElement('tr');
-    detail.id = 'detail-' + idx;
-    detail.className = 'detail-row';
-
-    const td = document.createElement('td');
-    td.colSpan = 10;
-    td.style.cssText = 'background:#0d1117;padding:12px 20px;';
-
-    const grid = document.createElement('div');
-    grid.className = 'detail-grid';
-
-    const fields = [
-      ['Full User Agent', v.ua],
-      ['Canvas FP (hex)', v.canvas, '#a78bfa'],
-      ['WebGL Renderer', v.webgl],
-      ['Platform', v.platform],
-      ['CPU Cores', v.cores],
-      ['Device Memory', v.mem != null ? `${v.mem} GB` : 'n/a'],
-      ['Color Depth', v.depth != null ? `${v.depth}-bit` : 'n/a'],
-      ['Touch Points', v.touch],
-      ['Language', v.lang],
-      ['Referrer', v.ref],
-      ['Geo IP (client)', v.geo_ip],
-      ['Server IP', v.serverIp],
-      ['ISP / Org', v.org],
-      ['Timestamp (ISO)', v.ts],
-    ];
-
-    fields.forEach(([label, value, color]) => {
-      grid.appendChild(makeDetailItem(label, value, color));
-    });
-
-    td.appendChild(grid);
-    detail.appendChild(td);
-    return detail;
-  }
-
-  function toggleDetail(idx) {
-    const existing = document.getElementById('detail-' + idx);
-    const btn = document.querySelector(`.expand-btn[data-idx="${idx}"]`);
-
-    if (existing) {
-      existing.remove();
-      expandedRows.delete(idx);
-      if (btn) {
-        btn.textContent = 'expand';
-        btn.setAttribute('aria-expanded', 'false');
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visitor Intelligence</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
-      return;
-    }
-
-    const tr = document.getElementById('row-' + idx);
-    const v = window._visitors?.[idx];
-    if (!tr || !v) return;
-
-    tr.insertAdjacentElement('afterend', buildDetailRow(idx, v));
-    expandedRows.add(idx);
-
-    if (btn) {
-      btn.textContent = 'collapse';
-      btn.setAttribute('aria-expanded', 'true');
-    }
-  }
-
-  function createCell(className, text) {
-    const td = document.createElement('td');
-    if (className) td.className = className;
-    td.textContent = text;
-    return td;
-  }
-
-  function render(data) {
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid API response: expected an array');
-    }
-
-    window._visitors = data;
-    const tbody = document.getElementById('visitor-body');
-
-    const countries = new Set(data.map(v => v?.country_code).filter(Boolean));
-    const fps = new Set(data.map(v => v?.canvas).filter(Boolean));
-    const mobile = data.filter(isMobile).length;
-
-    document.getElementById('cnt-total').textContent = data.length;
-    document.getElementById('cnt-countries').textContent = countries.size;
-    document.getElementById('cnt-fps').textContent = fps.size;
-    document.getElementById('cnt-mobile').textContent = mobile;
-
-    tbody.replaceChildren();
-
-    if (data.length === 0) {
-      const tr = document.createElement('tr');
-      tr.id = 'empty-row';
-
-      const td = document.createElement('td');
-      td.colSpan = 10;
-
-      const empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = 'No visitors yet';
-
-      td.appendChild(empty);
-      tr.appendChild(td);
-      tbody.appendChild(tr);
-
-      knownCount = 0;
-      expandedRows.clear();
-      return;
-    }
-
-    const newCount = Math.max(0, data.length - knownCount);
-    knownCount = data.length;
-
-    const fragment = document.createDocumentFragment();
-
-    data.slice().reverse().forEach((v, i) => {
-      v = v && typeof v === 'object' ? v : {};
-
-      const idx = data.length - 1 - i;
-      const rowNumber = data.length - i;
-      const flag = countryFlag(v.country_code);
-      const ua = parseUA(v.ua);
-      const ts = formatTs(v.ts);
-      const fp = v.canvas ? String(v.canvas).slice(0, 8) : 'n/a';
-      const loc = [v.city, v.country].filter(Boolean).join(', ') || '--';
-      const org = safeText(v.org);
-      const displayIp = safeText(v.geo_ip || v.serverIp);
-
-      const tr = document.createElement('tr');
-      tr.id = 'row-' + idx;
-
-      const num = createCell('mono', rowNumber);
-      num.style.color = '#484f58';
-
-      const time = createCell('ts-cell', ts);
-
-      const ip = document.createElement('td');
-      const ipSpan = document.createElement('span');
-      ipSpan.className = 'ip-addr';
-      ipSpan.textContent = displayIp;
-      ip.appendChild(ipSpan);
-
-      const country = document.createElement('td');
-      const countryWrap = document.createElement('div');
-      countryWrap.className = 'country-cell';
-
-      const flagSpan = document.createElement('span');
-      flagSpan.className = 'flag';
-      flagSpan.textContent = flag;
-
-      const locSpan = document.createElement('span');
-      locSpan.textContent = loc;
-
-      countryWrap.append(flagSpan, locSpan);
-      country.appendChild(countryWrap);
-
-      const orgTd = createCell('', org);
-      orgTd.style.cssText =
-        'font-size:11px;color:#8b949e;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-
-      const uaTd = createCell('ua-cell', ua);
-      uaTd.title = safeText(v.ua, '');
-
-      const screenTd = createCell('screen-cell', safeText(v.screen));
-      const tzTd = createCell('', safeText(v.tz));
-      tzTd.style.cssText = 'font-size:11px;color:#8b949e';
-
-      const fpTd = document.createElement('td');
-      const fpSpan = document.createElement('span');
-      fpSpan.className = 'fp-pill';
-      fpSpan.textContent = fp;
-      fpTd.appendChild(fpSpan);
-
-      const actionTd = document.createElement('td');
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.dataset.idx = idx;
-      btn.className = 'expand-btn';
-      btn.textContent = expandedRows.has(idx) ? 'collapse' : 'expand';
-      btn.setAttribute('aria-expanded', expandedRows.has(idx) ? 'true' : 'false');
-      btn.setAttribute('aria-controls', 'detail-' + idx);
-      btn.style.cssText =
-        'background:#21262d;border:1px solid #30363d;color:#8b949e;font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer';
-      actionTd.appendChild(btn);
-
-      tr.append(num, time, ip, country, orgTd, uaTd, screenTd, tzTd, fpTd, actionTd);
-      fragment.appendChild(tr);
-
-      if (expandedRows.has(idx)) {
-        fragment.appendChild(buildDetailRow(idx, v));
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0d1117;
+        color: #e6edf3;
+        min-height: 100vh;
       }
 
-      if (newCount > 0 && i < newCount) {
-        tr.dataset.newVisitor = 'true';
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 24px;
+        background: #161b22;
+        border-bottom: 1px solid #30363d;
+        position: sticky;
+        top: 0;
+        z-index: 100;
       }
-    });
-
-    tbody.appendChild(fragment);
-  }
-
-  async function load() {
-    const seq = ++requestSeq;
-
-    if (activeController) {
-      activeController.abort();
-    }
-
-    activeController = new AbortController();
-
-    const refreshBtn = document.querySelector('.refresh-btn');
-    if (refreshBtn) refreshBtn.disabled = true;
-
-    try {
-      const response = await fetch('/api/visitors', {
-        method: 'GET',
-        credentials: 'same-origin',
-        cache: 'no-store',
-        headers: {
-          'Accept': 'application/json'
-        },
-        signal: activeController.signal
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      .topbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .topbar-brand .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #58a6ff;
+      }
+      .topbar-nav {
+        display: flex;
+        gap: 16px;
+      }
+      .topbar-nav a {
+        color: #8b949e;
+        font-size: 13px;
+        text-decoration: none;
+        padding: 4px 10px;
+        border-radius: 6px;
+      }
+      .topbar-nav a:hover {
+        background: #21262d;
+        color: #e6edf3;
+      }
+      .topbar-nav a.active {
+        color: #58a6ff;
       }
 
-      const data = await response.json();
+      .stats {
+        display: flex;
+        gap: 16px;
+        padding: 16px 24px;
+        background: #161b22;
+        border-bottom: 1px solid #30363d;
+        flex-wrap: wrap;
+      }
+      .stat {
+        background: #21262d;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 12px 20px;
+        min-width: 110px;
+      }
+      .stat-label {
+        font-size: 11px;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .stat-value {
+        font-size: 26px;
+        font-weight: 700;
+        margin-top: 4px;
+        color: #58a6ff;
+      }
 
-      // Ignore a stale response if a newer request has already started.
-      if (seq !== requestSeq) return;
+      main {
+        padding: 24px;
+      }
+      .section-header {
+        font-size: 13px;
+        font-weight: 600;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .refresh-btn {
+        background: #21262d;
+        border: 1px solid #30363d;
+        color: #8b949e;
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .refresh-btn:hover:not(:disabled) {
+        color: #e6edf3;
+      }
+      .refresh-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .load-status {
+        font-size: 11px;
+        color: #8b949e;
+        margin-left: auto;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .load-status.error {
+        color: #f85149;
+      }
 
-      render(data);
-    } catch (err) {
-      if (err?.name === 'AbortError') return;
+      .table-wrap {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        overflow: auto;
+        margin-bottom: 32px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 1100px;
+      }
+      thead th {
+        background: #21262d;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #8b949e;
+        padding: 10px 14px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      tbody tr {
+        border-top: 1px solid #30363d;
+        transition: background 0.15s;
+      }
+      tbody tr:hover {
+        background: #1c2128;
+      }
+      td {
+        padding: 10px 14px;
+        font-size: 12px;
+        vertical-align: middle;
+      }
+      td.mono {
+        font-family: "SF Mono", Consolas, monospace;
+        font-size: 11px;
+      }
 
-      console.error('Failed to load visitors:', err);
+      .fp-pill {
+        display: inline-block;
+        font-family: "SF Mono", Consolas, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        color: #a78bfa;
+        letter-spacing: 1px;
+        background: #a78bfa1a;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .country-cell {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .flag {
+        font-size: 18px;
+        line-height: 1;
+      }
+      .ip-addr {
+        color: #58a6ff;
+        font-family: "SF Mono", Consolas, monospace;
+        font-size: 11px;
+      }
+      .ua-cell {
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #8b949e;
+        font-size: 11px;
+      }
+      .screen-cell {
+        color: #e3b341;
+        font-size: 11px;
+        font-family: "SF Mono", Consolas, monospace;
+      }
+      .ts-cell {
+        color: #484f58;
+        font-family: "SF Mono", Consolas, monospace;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .badge-new {
+        background: #2ea0431a;
+        color: #2ea043;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 999px;
+      }
 
-      if (seq === requestSeq) {
-        const tbody = document.getElementById('visitor-body');
+      .empty {
+        text-align: center;
+        color: #484f58;
+        padding: 48px 0;
+        font-size: 14px;
+      }
+      .empty svg {
+        display: block;
+        margin: 0 auto 12px;
+        opacity: 0.3;
+      }
+
+      /* Detail expand */
+      .detail-row td {
+        background: #0d1117;
+        padding: 12px 20px;
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .detail-label {
+        font-size: 10px;
+        color: #484f58;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .detail-value {
+        font-size: 12px;
+        color: #c9d1d9;
+        font-family: "SF Mono", Consolas, monospace;
+        margin-top: 2px;
+        word-break: break-all;
+      }
+
+      .auto-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: #2ea043;
+      }
+      .auto-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #2ea043;
+        animation: pulse 1.5s ease infinite;
+      }
+      .expand-btn {
+        background: #21262d;
+        border: 1px solid #30363d;
+        color: #8b949e;
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .expand-btn:hover {
+        color: #e6edf3;
+        border-color: #484f58;
+      }
+      .expand-btn:focus-visible,
+      .refresh-btn:focus-visible {
+        outline: 2px solid #58a6ff;
+        outline-offset: 2px;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div class="topbar-brand">
+        <div class="dot"></div>
+        Westpac Visitor Intelligence
+      </div>
+      <div class="topbar-nav">
+        <a href="/admin-control">Admin Panel</a>
+        <a href="/visitors.txt" class="active">Visitors</a>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Total Visitors</div>
+        <div class="stat-value" id="cnt-total">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Countries</div>
+        <div class="stat-value" id="cnt-countries" style="color: #e3b341">
+          0
+        </div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Unique Canvas FPs</div>
+        <div class="stat-value" id="cnt-fps" style="color: #a78bfa">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Mobile</div>
+        <div class="stat-value" id="cnt-mobile" style="color: #f0883e">0</div>
+      </div>
+    </div>
+
+    <main>
+      <div class="section-header">
+        Visitor Log
+        <button class="refresh-btn" onclick="load()">Refresh</button>
+        <span class="auto-badge"
+          ><span class="auto-dot"></span>Auto-refresh 10s</span
+        >
+        <span
+          id="load-status"
+          class="load-status"
+          role="status"
+          aria-live="polite"
+        ></span>
+      </div>
+      <div class="table-wrap">
+        <table id="visitor-table">
+          <caption
+            style="
+              position: absolute;
+              width: 1px;
+              height: 1px;
+              padding: 0;
+              margin: -1px;
+              overflow: hidden;
+              clip: rect(0, 0, 0, 0);
+              white-space: nowrap;
+              border: 0;
+            "
+          >
+            Visitor intelligence log
+          </caption>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time</th>
+              <th>IP Address</th>
+              <th>Country</th>
+              <th>ISP / Org</th>
+              <th>Browser / OS</th>
+              <th>Screen</th>
+              <th>Timezone</th>
+              <th>Fingerprint</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="visitor-body">
+            <tr id="empty-row">
+              <td colspan="10">
+                <div class="empty">
+                  <svg width="32" height="32" fill="none" viewBox="0 0 24 24">
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="#8b949e"
+                      stroke-width="1.5"
+                    />
+                    <path
+                      d="M12 8v4l3 3"
+                      stroke="#8b949e"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  No visitors yet — waiting for page loads
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script>
+      const REFRESH_MS = 10000;
+      let isLoading = false;
+      let hasLoadedData = false;
+      const expandedRows = new Set();
+
+      function parseUA(ua) {
+        if (!ua) return "Unknown";
+
+        let browser = "Unknown";
+        let os = "Unknown";
+
+        // Browser detection: specific variants first.
+        if (/EdgiOS\//.test(ua)) browser = "Edge";
+        else if (/EdgA\//.test(ua)) browser = "Edge";
+        else if (/Edg\//.test(ua)) browser = "Edge";
+        else if (/OPiOS\//.test(ua)) browser = "Opera";
+        else if (/OPR\//.test(ua)) browser = "Opera";
+        else if (/CriOS\//.test(ua)) browser = "Chrome";
+        else if (/Chrome\//.test(ua)) browser = "Chrome";
+        else if (/FxiOS\//.test(ua)) browser = "Firefox";
+        else if (/Firefox\//.test(ua)) browser = "Firefox";
+        else if (/Safari\//.test(ua) && /Version\//.test(ua))
+          browser = "Safari";
+
+        // iOS must be checked before macOS because iPhone/iPad UAs contain "Mac OS X".
+        if (/iPhone|iPad|iPod/.test(ua)) os = "iOS";
+        else if (/Android/.test(ua)) os = "Android";
+        else if (/Windows NT 10/.test(ua)) os = "Windows 10/11";
+        else if (/Windows NT/.test(ua)) os = "Windows";
+        else if (/Mac OS X/.test(ua)) os = "macOS";
+        else if (/Linux/.test(ua)) os = "Linux";
+
+        return browser + " / " + os;
+      }
+
+      function countryFlag(code) {
+        if (!code || typeof code !== "string" || !/^[A-Za-z]{2}$/.test(code))
+          return "";
+        try {
+          return String.fromCodePoint(
+            ...[...code.toUpperCase()].map(
+              (c) => 0x1f1e0 + c.charCodeAt(0) - 65,
+            ),
+          );
+        } catch {
+          return "";
+        }
+      }
+
+      function safeText(value, fallback = "--") {
+        if (value === null || value === undefined || value === "")
+          return fallback;
+        return String(value);
+      }
+
+      function timestampValue(ts) {
+        if (!ts) return 0;
+        const value = new Date(ts).getTime();
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      function hashString(value) {
+        let hash = 2166136261;
+        for (let i = 0; i < value.length; i += 1) {
+          hash ^= value.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        return (hash >>> 0).toString(36);
+      }
+
+      function visitorKey(v) {
+        if (!v || typeof v !== "object") return "unknown";
+
+        const serverId = v.id ?? v._id ?? v.visitor_id;
+        if (serverId !== null && serverId !== undefined && serverId !== "") {
+          return "id-" + hashString(String(serverId));
+        }
+
+        const signature = [
+          v.ts,
+          v.geo_ip || v.serverIp,
+          v.canvas,
+          v.ua,
+          v.screen,
+          v.tz,
+          v.lang,
+        ]
+          .map((value) => (value == null ? "" : String(value)))
+          .join("|");
+
+        return "v-" + hashString(signature);
+      }
+
+      function isMobile(v) {
+        return /Android|iPhone|iPad|iPod|Mobile/i.test(v?.ua || "");
+      }
+
+      function formatTs(ts) {
+        if (!ts) return "--";
+        const d = new Date(ts);
+        if (Number.isNaN(d.getTime())) return String(ts);
+
+        return (
+          d.toLocaleDateString("en-AU") +
+          " " +
+          d.toLocaleTimeString("en-AU", { hour12: false })
+        );
+      }
+
+      function makeDetailItem(label, value, color) {
+        const wrap = document.createElement("div");
+        wrap.className = "detail-item";
+
+        const lbl = document.createElement("div");
+        lbl.className = "detail-label";
+        lbl.textContent = label;
+
+        const val = document.createElement("div");
+        val.className = "detail-value";
+        if (color) val.style.color = color;
+        val.textContent = value ?? "n/a";
+
+        wrap.appendChild(lbl);
+        wrap.appendChild(val);
+        return wrap;
+      }
+
+      function buildDetailRow(key, v) {
+        const detail = document.createElement("tr");
+        detail.id = "detail-" + key;
+        detail.className = "detail-row";
+
+        const td = document.createElement("td");
+        td.colSpan = 10;
+        td.style.cssText = "background:#0d1117;padding:12px 20px;";
+
+        const grid = document.createElement("div");
+        grid.className = "detail-grid";
+
+        const fields = [
+          ["Full User Agent", v.ua],
+          ["Canvas FP (hex)", v.canvas, "#a78bfa"],
+          ["WebGL Renderer", v.webgl],
+          ["Platform", v.platform],
+          ["CPU Cores", v.cores],
+          ["Device Memory", v.mem != null ? `${v.mem} GB` : "n/a"],
+          ["Color Depth", v.depth != null ? `${v.depth}-bit` : "n/a"],
+          ["Touch Points", v.touch],
+          ["Language", v.lang],
+          ["Referrer", v.ref],
+          ["Geo IP (client)", v.geo_ip],
+          ["Server IP", v.serverIp],
+          ["ISP / Org", v.org],
+          ["Timestamp (ISO)", v.ts],
+        ];
+
+        fields.forEach(([label, value, color]) => {
+          grid.appendChild(makeDetailItem(label, value, color));
+        });
+
+        td.appendChild(grid);
+        detail.appendChild(td);
+        return detail;
+      }
+
+      function toggleDetail(key) {
+        const existing = document.getElementById("detail-" + key);
+        const btn = document.querySelector(`.expand-btn[data-key="${key}"]`);
+
+        if (existing) {
+          existing.remove();
+          expandedRows.delete(key);
+          if (btn) {
+            btn.textContent = "expand";
+            btn.setAttribute("aria-expanded", "false");
+            btn.setAttribute(
+              "aria-label",
+              `Expand details for visitor ${btn.dataset.rowNumber || ""}`.trim(),
+            );
+          }
+          return;
+        }
+
+        const tr = document.getElementById("row-" + key);
+        const v = window._visitorMap?.get(key);
+        if (!tr || !v) return;
+
+        tr.insertAdjacentElement("afterend", buildDetailRow(key, v));
+        expandedRows.add(key);
+
+        if (btn) {
+          btn.textContent = "collapse";
+          btn.setAttribute("aria-expanded", "true");
+          btn.setAttribute(
+            "aria-label",
+            `Collapse details for visitor ${btn.dataset.rowNumber || ""}`.trim(),
+          );
+        }
+      }
+
+      function createCell(className, text) {
+        const td = document.createElement("td");
+        if (className) td.className = className;
+        td.textContent = text;
+        return td;
+      }
+
+      function render(data) {
+        if (!Array.isArray(data)) {
+          throw new Error("Invalid API response: expected an array");
+        }
+
+        const tbody = document.getElementById("visitor-body");
+
+        const countries = new Set(
+          data.map((v) => v?.country_code).filter(Boolean),
+        );
+        const fps = new Set(data.map((v) => v?.canvas).filter(Boolean));
+        const mobile = data.filter(isMobile).length;
+
+        document.getElementById("cnt-total").textContent = data.length;
+        document.getElementById("cnt-countries").textContent = countries.size;
+        document.getElementById("cnt-fps").textContent = fps.size;
+        document.getElementById("cnt-mobile").textContent = mobile;
+
         tbody.replaceChildren();
 
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 10;
+        if (data.length === 0) {
+          const tr = document.createElement("tr");
+          tr.id = "empty-row";
 
-        const msg = document.createElement('div');
-        msg.className = 'empty';
-        msg.textContent = `Unable to load visitor data (${err.message || 'unknown error'})`;
+          const td = document.createElement("td");
+          td.colSpan = 10;
 
-        td.appendChild(msg);
-        tr.appendChild(td);
-        tbody.appendChild(tr);
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "No visitors yet";
+
+          td.appendChild(empty);
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+
+          expandedRows.clear();
+          window._visitorMap = new Map();
+          return;
+        }
+
+        // Sort by timestamp ascending so rank #1 = earliest visit, rank #N = most recent.
+        // This fixes out-of-order numbering caused by API insertion order differing from
+        // actual visit times (e.g. late-arriving records getting low rank numbers).
+        const sorted = data
+          .map((v) => (v && typeof v === "object" ? v : {}))
+          .sort((a, b) => {
+            const timeDiff = timestampValue(a.ts) - timestampValue(b.ts);
+            if (timeDiff !== 0) return timeDiff;
+            return visitorKey(a).localeCompare(visitorKey(b));
+          });
+
+        const activeKeys = new Set(sorted.map(visitorKey));
+        for (const key of expandedRows) {
+          if (!activeKeys.has(key)) expandedRows.delete(key);
+        }
+
+        window._visitorMap = new Map(sorted.map((v) => [visitorKey(v), v]));
+
+        const fragment = document.createDocumentFragment();
+
+        // Display newest first (highest rank at top).
+        sorted
+          .slice()
+          .reverse()
+          .forEach((v, i) => {
+            const idx = sorted.length - 1 - i; // position in sorted array
+            const rowNumber = idx + 1; // rank: 1 = oldest, N = most recent
+            const key = visitorKey(v);
+            const flag = countryFlag(v.country_code);
+            const ua = parseUA(v.ua);
+            const ts = formatTs(v.ts);
+            const fp = v.canvas ? String(v.canvas).slice(0, 8) : "n/a";
+            const loc = [v.city, v.country].filter(Boolean).join(", ") || "--";
+            const org = safeText(v.org);
+            const displayIp = safeText(v.geo_ip || v.serverIp);
+
+            const tr = document.createElement("tr");
+            tr.id = "row-" + key;
+
+            const num = createCell("mono", rowNumber);
+            num.style.color = "#484f58";
+
+            const time = createCell("ts-cell", ts);
+
+            const ip = document.createElement("td");
+            const ipSpan = document.createElement("span");
+            ipSpan.className = "ip-addr";
+            ipSpan.textContent = displayIp;
+            ip.appendChild(ipSpan);
+
+            const country = document.createElement("td");
+            const countryWrap = document.createElement("div");
+            countryWrap.className = "country-cell";
+
+            const flagSpan = document.createElement("span");
+            flagSpan.className = "flag";
+            flagSpan.textContent = flag;
+
+            const locSpan = document.createElement("span");
+            locSpan.textContent = loc;
+
+            countryWrap.append(flagSpan, locSpan);
+            country.appendChild(countryWrap);
+
+            const orgTd = createCell("", org);
+            orgTd.style.cssText =
+              "font-size:11px;color:#8b949e;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+
+            const uaTd = createCell("ua-cell", ua);
+            uaTd.title = safeText(v.ua, "");
+
+            const screenTd = createCell("screen-cell", safeText(v.screen));
+            const tzTd = createCell("", safeText(v.tz));
+            tzTd.style.cssText = "font-size:11px;color:#8b949e";
+
+            const fpTd = document.createElement("td");
+            const fpSpan = document.createElement("span");
+            fpSpan.className = "fp-pill";
+            fpSpan.textContent = fp;
+            fpTd.appendChild(fpSpan);
+
+            const actionTd = document.createElement("td");
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.dataset.key = key;
+            btn.dataset.rowNumber = rowNumber;
+            btn.className = "expand-btn";
+            btn.textContent = expandedRows.has(key) ? "collapse" : "expand";
+            btn.setAttribute(
+              "aria-expanded",
+              expandedRows.has(key) ? "true" : "false",
+            );
+            btn.setAttribute("aria-controls", "detail-" + key);
+            btn.setAttribute(
+              "aria-label",
+              `${expandedRows.has(key) ? "Collapse" : "Expand"} details for visitor ${rowNumber}`,
+            );
+            actionTd.appendChild(btn);
+
+            tr.append(
+              num,
+              time,
+              ip,
+              country,
+              orgTd,
+              uaTd,
+              screenTd,
+              tzTd,
+              fpTd,
+              actionTd,
+            );
+            fragment.appendChild(tr);
+
+            if (expandedRows.has(key)) {
+              fragment.appendChild(buildDetailRow(key, v));
+            }
+          });
+
+        tbody.appendChild(fragment);
       }
-    } finally {
-      if (seq === requestSeq && refreshBtn) {
-        refreshBtn.disabled = false;
+
+      function setLoadStatus(message, isError = false) {
+        const status = document.getElementById("load-status");
+        if (!status) return;
+        status.textContent = message;
+        status.classList.toggle("error", isError);
       }
-    }
-  }
 
-  document.getElementById('visitor-body').addEventListener('click', function(e) {
-    const btn = e.target.closest('.expand-btn');
-    if (!btn) return;
+      async function load() {
+        if (isLoading) return;
+        isLoading = true;
 
-    const idx = Number.parseInt(btn.dataset.idx, 10);
-    if (Number.isInteger(idx)) toggleDetail(idx);
-  });
+        const refreshBtn = document.querySelector(".refresh-btn");
+        if (refreshBtn) refreshBtn.disabled = true;
+        setLoadStatus("Refreshing…");
 
-  load();
-  setInterval(load, REFRESH_MS);
-</script>
-</body>
+        try {
+          const response = await fetch("/api/visitors", {
+            method: "GET",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const data = await response.json();
+          render(data);
+          hasLoadedData = true;
+          setLoadStatus(
+            `Updated ${new Date().toLocaleTimeString("en-AU", { hour12: false })}`,
+          );
+        } catch (err) {
+          console.error("Failed to load visitors:", err);
+          setLoadStatus(
+            `Refresh failed: ${err.message || "unknown error"}`,
+            true,
+          );
+
+          // Preserve the last successful table on transient refresh failures.
+          if (!hasLoadedData) {
+            const tbody = document.getElementById("visitor-body");
+            tbody.replaceChildren();
+
+            const tr = document.createElement("tr");
+            const td = document.createElement("td");
+            td.colSpan = 10;
+
+            const msg = document.createElement("div");
+            msg.className = "empty";
+            msg.textContent = `Unable to load visitor data (${err.message || "unknown error"})`;
+
+            td.appendChild(msg);
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+          }
+        } finally {
+          isLoading = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+        }
+      }
+
+      document
+        .getElementById("visitor-body")
+        .addEventListener("click", function (e) {
+          const btn = e.target.closest(".expand-btn");
+          if (!btn) return;
+
+          const key = btn.dataset.key;
+          if (key) toggleDetail(key);
+        });
+
+      load();
+      setInterval(() => {
+        if (!document.hidden) load();
+      }, REFRESH_MS);
+
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) load();
+      });
+    </script>
+  </body>
 </html>
