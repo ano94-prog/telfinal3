@@ -7,6 +7,8 @@ channel = "stable-25_05"
 [deployment]
 build = ["sh", "-c", "npm install --include=dev && npm run db:push && npm run build"]
 run = ["node", "./dist/index.cjs"]
+deploymentTarget = "gce"
+ignorePorts = false
 
 [[ports]]
 localPort = 5000
