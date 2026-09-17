@@ -4,7 +4,7 @@ export function Footer() {
     return (
         <footer className="auth-footer">
             <div className="auth-footer-content">
-                <p className="auth-footer-copyright">Copyright © {new Date().getFullYear()}</p>
+                <p className="auth-footer-copyright">Copyright © 2026 Telstra</p>
                 <Link href="/privacy" className="auth-footer-privacy" data-testid="link-privacy">
                     Privacy
                 </Link>
